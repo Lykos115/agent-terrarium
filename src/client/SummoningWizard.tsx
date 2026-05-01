@@ -23,12 +23,15 @@ import type { AgentConfig, Specialty, ModelTier } from "../types";
  */
 export function SummoningWizard({
   onSummon,
+  onRestore,
 }: {
   onSummon: (config: AgentConfig) => void;
+  onRestore?: (agentId: string) => void;
 }) {
   const wizardOpen = useTerrariumStore((s) => s.ui.wizardOpen);
   const setWizardOpen = useTerrariumStore((s) => s.setWizardOpen);
   const agents = useTerrariumStore((s) => s.agentList);
+  const archivedAgents = useTerrariumStore((s) => Array.from(s.archivedAgents.values()));
 
   const [step, setStep] = useState(1);
   const [selectedSpecialty, setSelectedSpecialty] = useState<Specialty | null>(
@@ -160,10 +163,21 @@ export function SummoningWizard({
 
         {/* Step content */}
         {step === 1 && (
-          <Step1Specialty
-            selected={selectedSpecialty}
-            onSelect={setSelectedSpecialty}
-          />
+          <>
+            {archivedAgents.length > 0 && (
+              <RestoreArchivedAgents
+                agents={archivedAgents}
+                onRestore={(agentId) => {
+                  onRestore?.(agentId);
+                  setWizardOpen(false);
+                }}
+              />
+            )}
+            <Step1Specialty
+              selected={selectedSpecialty}
+              onSelect={setSelectedSpecialty}
+            />
+          </>
         )}
         {step === 2 && (
           <Step2Tier selected={selectedTier} onSelect={setSelectedTier} />
@@ -248,6 +262,75 @@ export function SummoningWizard({
         </div>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Restore archived agents
+// ---------------------------------------------------------------------------
+
+function RestoreArchivedAgents({
+  agents,
+  onRestore,
+}: {
+  agents: Array<{ id: string; name: string; specialty: string; modelTier: string }>;
+  onRestore: (agentId: string) => void;
+}) {
+  return (
+    <section
+      style={{
+        marginBottom: 26,
+        padding: 16,
+        border: "1px solid rgba(108, 240, 147, 0.32)",
+        borderRadius: 10,
+        background: "rgba(108, 240, 147, 0.06)",
+      }}
+    >
+      <h3 style={{ margin: "0 0 6px", color: "#dfffe8", fontSize: 16 }}>
+        Restore dormant agents
+      </h3>
+      <p style={{ margin: "0 0 12px", color: "#9fb8a7", fontSize: 13 }}>
+        Previously dismissed agents are archived, not deleted. Bring one back instead of summoning a new agent.
+      </p>
+      <div style={{ display: "grid", gap: 8 }}>
+        {agents.map((agent) => (
+          <div
+            key={agent.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              padding: "10px 12px",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 8,
+              background: "rgba(0,0,0,0.18)",
+            }}
+          >
+            <div>
+              <div style={{ color: "#f0fff4", fontWeight: 700 }}>{agent.name}</div>
+              <div style={{ color: "#8aa894", fontSize: 12 }}>
+                {agent.specialty} · {agent.modelTier}
+              </div>
+            </div>
+            <button
+              onClick={() => onRestore(agent.id)}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid rgba(108, 240, 147, 0.55)",
+                borderRadius: 8,
+                background: "rgba(108, 240, 147, 0.14)",
+                color: "#b8ffc8",
+                cursor: "pointer",
+                fontWeight: 700,
+              }}
+            >
+              Restore
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

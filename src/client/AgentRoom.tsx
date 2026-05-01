@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Application } from "pixi.js";
 import { PixiRoom, PixiSpriteActor } from "../modules/sprite-engine";
 import type { Agent } from "../types";
-import { useTerrariumStore } from "./store";
+import { requestArchiveAgent, useTerrariumStore } from "./store";
 import {
   ROOM_LOOKS,
   type RoomCustomization,
@@ -128,6 +128,7 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
             room={room}
             setRoom={setRoom}
             uploadImage={uploadImage}
+            ws={ws}
           />
         </div>
 
@@ -142,12 +143,22 @@ function RoomSettingsCard({
   room,
   setRoom,
   uploadImage,
+  ws,
 }: {
   agent: Agent;
   room: RoomCustomization;
   setRoom: (next: RoomCustomization) => void;
   uploadImage: (file: File | undefined) => void;
+  ws: React.MutableRefObject<WebSocket | null>;
 }) {
+  const dismissAgent = () => {
+    const confirmed = window.confirm(
+      `Dismiss ${agent.name}? They will be archived and can be restored from the summoning wizard.`,
+    );
+    if (confirmed && ws.current) {
+      requestArchiveAgent(ws.current, agent.id);
+    }
+  };
   return (
     <aside
       style={{
@@ -209,6 +220,40 @@ function RoomSettingsCard({
             Remove image
           </button>
         )}
+      </div>
+
+      <div
+        style={{
+          marginTop: 16,
+          paddingTop: 14,
+          borderTop: "1px solid rgba(255,255,255,0.08)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div>
+          <div style={{ color: "#ffb8b8", fontSize: 12, fontWeight: 700 }}>Dismiss agent</div>
+          <div style={{ color: "#8f91ad", fontSize: 11 }}>Archives, does not delete.</div>
+        </div>
+        <button
+          onClick={dismissAgent}
+          disabled={!ws.current}
+          style={{
+            padding: "8px 11px",
+            border: "1px solid rgba(240, 108, 108, 0.5)",
+            borderRadius: 9,
+            background: "rgba(240, 108, 108, 0.1)",
+            color: "#ffb8b8",
+            cursor: ws.current ? "pointer" : "not-allowed",
+            opacity: ws.current ? 1 : 0.45,
+            fontWeight: 700,
+            fontSize: 12,
+          }}
+        >
+          Dismiss
+        </button>
       </div>
     </aside>
   );
