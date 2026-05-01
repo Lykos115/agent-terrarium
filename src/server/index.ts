@@ -2,17 +2,24 @@ import { join } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
 import { StubWebSocketRelay } from "../modules/ws-relay";
-import { initDatabase } from "../modules/agent-store";
+import {
+  initDatabase,
+  SqliteAgentStore,
+  seedAgents,
+} from "../modules/agent-store";
 
 const PORT = 3000;
 const VITE_PORT = 5173;
 const isDev = process.env.NODE_ENV !== "production";
 const DB_PATH = join(import.meta.dir, "../../data/terrarium.db");
 
-// Init SQLite — creates the .db file on first run
+// Init SQLite — creates the .db file, runs migrations, seeds initial agents
 console.log(`[db] Initializing SQLite at ${DB_PATH}`);
 const db = initDatabase(DB_PATH);
-console.log("[db] SQLite ready");
+const store = new SqliteAgentStore(db);
+await seedAgents(store);
+const seedCount = (await store.listAgents()).length;
+console.log(`[db] SQLite ready — ${seedCount} agent(s) loaded`);
 
 // Init WebSocket relay stub
 const relay = new StubWebSocketRelay();
