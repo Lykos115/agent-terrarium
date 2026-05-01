@@ -6,6 +6,7 @@ import type {
   ServerMessage,
   Specialty,
   ModelTier,
+  AgentState,
 } from "../types";
 import type { AgentStore } from "./agent-store";
 import { AgentNotFoundError } from "./agent-store";
@@ -27,6 +28,7 @@ export interface WebSocketRelay {
   handleMessage(ws: ServerWebSocket<unknown>, data: string): void;
   handleClose(ws: ServerWebSocket<unknown>): void;
   broadcast(message: ServerMessage): void;
+  pollAgentStates(): Promise<void>;
   shutdown(): void;
 }
 
@@ -93,6 +95,7 @@ function validateAgentConfig(
 export class TerrariumWebSocketRelay implements WebSocketRelay {
   private readonly clients = new Set<ServerWebSocket<unknown>>();
   private hermes: HermesGateway | null = null;
+  private readonly lastKnownStates = new Map<string, AgentState>();
 
   constructor(private readonly store: AgentStore) {}
 
@@ -349,6 +352,20 @@ export class TerrariumWebSocketRelay implements WebSocketRelay {
     }
   }
 
+  /** Poll Hermes and broadcast changed agent states to all connected clients. */
+  async pollAgentStates(): Promise<void> {
+    if (!this.hermes) return;
+    const states = await this.hermes.getAgentStates();
+    for (const [agentId, state] of states) {
+      if (this.lastKnownStates.get(agentId) === state) continue;
+      this.lastKnownStates.set(agentId, state);
+      this.broadcast({
+        type: "agent_state",
+        data: { agentId, state, statusText: statusTextForState(state) },
+      });
+    }
+  }
+
   shutdown(): void {
     for (const ws of this.clients) {
       try {
@@ -403,6 +420,19 @@ export class TerrariumWebSocketRelay implements WebSocketRelay {
 // ---------------------------------------------------------------------------
 
 /** Stub implementation — echoes ping/pong, no real routing. */
+function statusTextForState(state: AgentState): string {
+  switch (state) {
+    case "thinking":
+      return "Thinking…";
+    case "working":
+      return "Using tools…";
+    case "sleeping":
+      return "Sleeping";
+    case "idle":
+      return "Idle";
+  }
+}
+
 export class StubWebSocketRelay implements WebSocketRelay {
   private clients = new Set<ServerWebSocket<unknown>>();
 
@@ -432,6 +462,8 @@ export class StubWebSocketRelay implements WebSocketRelay {
     const payload = JSON.stringify(message);
     for (const ws of this.clients) ws.send(payload);
   }
+
+  async pollAgentStates(): Promise<void> {}
 
   shutdown(): void {
     for (const ws of this.clients) ws.close(1000, "Server shutting down");

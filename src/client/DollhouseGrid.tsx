@@ -54,10 +54,7 @@ export function DollhouseGrid() {
         </div>
 
         <section className="rounded-lg border border-gridline bg-gradient-to-b from-[#0a0e1d] to-[#04060f] p-4 shadow-room">
-          <div
-            className="grid aspect-[1.35] max-h-[720px] grid-rows-3 gap-3 xl:gap-4"
-            style={{ gridTemplateColumns: "1fr 1.65fr 1fr" }}
-          >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:gap-4">
             {Array.from({ length: 9 }, (_, slot) => {
               if (slot === 4) {
                 return (

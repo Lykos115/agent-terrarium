@@ -69,6 +69,13 @@ if (!HERMES_API_KEY) {
 const relay = new TerrariumWebSocketRelay(store);
 relay.setHermes(hermes);
 
+const STATE_POLL_INTERVAL_MS = Number(process.env.STATE_POLL_INTERVAL_MS ?? 1000);
+const statePollTimer = setInterval(() => {
+  relay.pollAgentStates().catch((err) => {
+    console.warn("[hermes] State poll failed:", err instanceof Error ? err.message : String(err));
+  });
+}, STATE_POLL_INTERVAL_MS);
+
 // Path to static files
 const distDir = join(import.meta.dir, "../../dist");
 const publicDir = join(import.meta.dir, "../../public");
@@ -210,6 +217,7 @@ console.log(`[server] Mode: ${isDev ? "development" : "production"}`);
 // Graceful shutdown
 async function shutdown() {
   console.log("\n[server] Shutting down...");
+  clearInterval(statePollTimer);
   relay.shutdown();
   db.close();
   viteProcess?.kill();

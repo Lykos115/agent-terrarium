@@ -146,6 +146,23 @@ describe("store: applyServerMessage", () => {
     );
   });
 
+  it("agent_state updates one agent's visual state", () => {
+    apply({ type: "agent_list", data: { agents: [agent("1"), agent("2")] } });
+    apply({
+      type: "agent_state",
+      data: { agentId: "1", state: "working", statusText: "Using tools" },
+    });
+    const s = useTerrariumStore.getState();
+    expect(s.agents.get("1")!.state).toBe("working");
+    expect(s.agents.get("1")!.statusText).toBe("Using tools");
+    expect(s.agents.get("2")!.state).toBe("idle");
+  });
+
+  it("agent_state ignores unknown agents", () => {
+    apply({ type: "agent_state", data: { agentId: "missing", state: "thinking" } });
+    expect(useTerrariumStore.getState().agents.size).toBe(0);
+  });
+
   it("error sets lastError for the UI to display", () => {
     apply({ type: "error", data: { message: "boom" } });
     expect(useTerrariumStore.getState().lastError).toBe("boom");

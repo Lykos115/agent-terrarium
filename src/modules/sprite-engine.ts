@@ -132,6 +132,7 @@ export class PixiSpriteActor implements SpriteActor {
   private overlay?: Graphics; // sparkles/gear
   private bubbleText?: Text;
   private state: SpriteState = "idle";
+  private bubbleKind: "thinking" | "sleeping" | null = null;
   private baseColor: number;
   private baseX: number = 0;
   private baseY: number = 0;
@@ -156,6 +157,12 @@ export class PixiSpriteActor implements SpriteActor {
   }
 
   setState(state: SpriteState): void {
+    if (this.state !== state) {
+      this.container.alpha = 0.45;
+      setTimeout(() => {
+        if (!this.destroyed) this.container.alpha = 1;
+      }, 180);
+    }
     this.state = state;
     this.redraw();
   }
@@ -323,17 +330,26 @@ export class PixiSpriteActor implements SpriteActor {
     // Trigger overlay refresh immediately
     this.tick();
 
-    // Special case: show "Z" bubble when entering sleeping
-    if (this.state === "sleeping" && !this.bubbleText) {
-      this.playBubble("Z", 10000); // long duration, will be cleared on state change
-    } else if (this.state !== "sleeping" && this.bubbleText?.text === "Z") {
-      // Clear Z bubble when leaving sleeping
-      if (this.bubbleText) {
-        this.container.removeChild(this.bubbleText);
-        this.bubbleText.destroy();
-        this.bubbleText = undefined;
-      }
+    // Persistent state bubbles. They are cleared on state change.
+    if (this.state === "thinking" && this.bubbleKind !== "thinking") {
+      this.clearBubble();
+      this.bubbleKind = "thinking";
+      this.playBubble("…", 60 * 60 * 1000);
+    } else if (this.state === "sleeping" && this.bubbleKind !== "sleeping") {
+      this.clearBubble();
+      this.bubbleKind = "sleeping";
+      this.playBubble("Z", 60 * 60 * 1000);
+    } else if (this.state !== "thinking" && this.state !== "sleeping" && this.bubbleText) {
+      this.clearBubble();
     }
+  }
+
+  private clearBubble(): void {
+    if (!this.bubbleText) return;
+    this.container.removeChild(this.bubbleText);
+    this.bubbleText.destroy();
+    this.bubbleText = undefined;
+    this.bubbleKind = null;
   }
 
   private shiftHue(color: number, hueDelta: number): number {

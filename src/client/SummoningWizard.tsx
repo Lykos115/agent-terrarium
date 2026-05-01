@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { Application } from "pixi.js";
+import { PixiSpriteActor } from "../modules/sprite-engine";
 import { useTerrariumStore } from "./store";
 import {
   SPECIALTIES,
@@ -313,7 +315,7 @@ function Step1Specialty({
                   color: "#e5e5f0",
                 }}
               >
-                {card.title}
+                {specialtyIcon(card.id)} {card.title}
               </div>
               <div style={{ fontSize: 13, color: "#aaa" }}>
                 {card.description}
@@ -330,6 +332,18 @@ function Step1Specialty({
 // Step 2 — Tier selection
 // ---------------------------------------------------------------------------
 
+function specialtyIcon(specialty: Specialty): string {
+  switch (specialty) {
+    case "Code Reviewer": return "🔎";
+    case "Spec Griller": return "🔥";
+    case "General Chat": return "💬";
+    case "DevOps": return "🚀";
+    case "Creative Writer": return "✍️";
+    case "Researcher": return "📚";
+    case "Debugger": return "🐞";
+  }
+}
+
 function Step2Tier({
   selected,
   onSelect,
@@ -337,18 +351,21 @@ function Step2Tier({
   selected: ModelTier;
   onSelect: (t: ModelTier) => void;
 }) {
-  const tiers: Array<{ tier: ModelTier; description: string }> = [
+  const tiers: Array<{ tier: ModelTier; model: string; description: string }> = [
     {
       tier: "Budget",
+      model: "Gemma 3 27B",
       description: "Fast, efficient — ideal for simple tasks and quick chats.",
     },
     {
       tier: "Balanced",
+      model: "Claude Sonnet 4.6",
       description:
         "Best of both worlds — capable reasoning without breaking the bank.",
     },
     {
       tier: "Premium",
+      model: "Claude Opus 4.6",
       description:
         "Top-tier model — deep thinking, complex problem-solving, premium results.",
     },
@@ -367,7 +384,7 @@ function Step2Tier({
         Select model tier
       </h3>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {tiers.map(({ tier, description }) => {
+        {tiers.map(({ tier, model, description }) => {
           const isSelected = selected === tier;
           return (
             <label
@@ -409,7 +426,7 @@ function Step2Tier({
                     color: "#e5e5f0",
                   }}
                 >
-                  {tier}
+                  {tier} <span style={{ color: "#888", fontWeight: 400 }}>— {model}</span>
                 </div>
                 <div style={{ fontSize: 13, color: "#aaa" }}>
                   {description}
@@ -481,17 +498,7 @@ function Step3SpriteKit({
                   e.currentTarget.style.borderColor = "#3a3a6a";
               }}
             >
-              {/* Placeholder preview blob (CSS animated) */}
-              <div
-                style={{
-                  width: 60,
-                  height: 60,
-                  borderRadius: "50%",
-                  background: kit.accentColor,
-                  flexShrink: 0,
-                  animation: "bobPulse 2s ease-in-out infinite",
-                }}
-              />
+              <SpriteKitPreview spriteId={kit.id} accentColor={kit.accentColor} />
               <div>
                 <div
                   style={{
@@ -511,20 +518,65 @@ function Step3SpriteKit({
         })}
       </div>
 
-      {/* CSS animation for blob preview */}
-      <style>{`
-        @keyframes bobPulse {
-          0%, 100% {
-            transform: translateY(0) scale(1);
-            opacity: 0.9;
-          }
-          50% {
-            transform: translateY(-6px) scale(1.05);
-            opacity: 1;
-          }
-        }
-      `}</style>
     </div>
+  );
+}
+
+function SpriteKitPreview({
+  spriteId,
+  accentColor,
+}: {
+  spriteId: string;
+  accentColor: string;
+}) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let app: Application | null = null;
+    let actor: PixiSpriteActor | null = null;
+
+    async function mount() {
+      if (!hostRef.current) return;
+      app = new Application();
+      await app.init({
+        width: 60,
+        height: 60,
+        backgroundAlpha: 0,
+        antialias: false,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+      });
+      if (cancelled || !hostRef.current) {
+        app.destroy(true);
+        return;
+      }
+      hostRef.current.replaceChildren(app.canvas);
+      actor = new PixiSpriteActor(app, spriteId, 18);
+      actor.setState("idle");
+      actor.getContainer().position.set(30, 34);
+      app.stage.addChild(actor.getContainer());
+    }
+
+    void mount();
+    return () => {
+      cancelled = true;
+      actor?.destroy();
+      app?.destroy(true);
+    };
+  }, [spriteId]);
+
+  return (
+    <div
+      ref={hostRef}
+      style={{
+        width: 60,
+        height: 60,
+        flexShrink: 0,
+        filter: `drop-shadow(0 0 10px ${accentColor})`,
+      }}
+      aria-label={`${spriteId} idle preview`}
+    />
   );
 }
 

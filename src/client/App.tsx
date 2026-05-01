@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { useTerrarium } from "./useTerrarium";
 import { useTerrariumStore, requestCreateAgent } from "./store";
 import EmptyTerrarium from "./EmptyTerrarium";
@@ -30,6 +31,21 @@ export default function App() {
   const lastError = useTerrariumStore((s) => s.lastError);
   const clearError = useTerrariumStore((s) => s.clearError);
 
+  const isEmpty = agentListLoaded && agents.size === 0;
+  const [emptyDissolving, setEmptyDissolving] = useState(false);
+  const wasEmpty = useRef(isEmpty);
+
+  useEffect(() => {
+    if (wasEmpty.current && !isEmpty && agentListLoaded && agents.size > 0) {
+      setEmptyDissolving(true);
+      const timeout = window.setTimeout(() => setEmptyDissolving(false), 650);
+      wasEmpty.current = isEmpty;
+      return () => window.clearTimeout(timeout);
+    }
+
+    wasEmpty.current = isEmpty;
+  }, [agentListLoaded, agents.size, isEmpty]);
+
   return (
     <div
       style={{
@@ -44,17 +60,26 @@ export default function App() {
         <Header connection={connection} />
       )}
 
-      <main style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", position: "relative" }}>
         {!agentListLoaded ? (
           <LoadingView />
-        ) : agents.size === 0 ? (
+        ) : isEmpty ? (
           <EmptyTerrarium />
-        ) : route.name === "grid" ? (
-          <DollhouseGrid />
-        ) : route.name === "room" ? (
-          <AgentRoomView agentId={route.agentId} ws={ws} />
         ) : (
-          <AgentEditorPlaceholder agentId={route.agentId} />
+          <ViewFadeIn>
+            {route.name === "grid" ? (
+              <DollhouseGrid />
+            ) : route.name === "room" ? (
+              <AgentRoomView agentId={route.agentId} ws={ws} />
+            ) : (
+              <AgentEditorPlaceholder agentId={route.agentId} />
+            )}
+          </ViewFadeIn>
+        )}
+        {emptyDissolving && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+            <EmptyTerrarium dissolving />
+          </div>
         )}
       </main>
 
@@ -156,6 +181,27 @@ function ErrorToast({
 // ---------------------------------------------------------------------------
 // View placeholders — swapped for real components by Layer 2 subagents
 // ---------------------------------------------------------------------------
+
+function ViewFadeIn({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        animation: "view-fade-in 650ms ease-out both",
+      }}
+    >
+      <style>{`
+        @keyframes view-fade-in {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+      {children}
+    </div>
+  );
+}
 
 function LoadingView() {
   return (

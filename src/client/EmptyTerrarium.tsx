@@ -8,7 +8,7 @@ import { useTerrariumStore } from "./store";
  *
  * GitHub issue: #5
  */
-export default function EmptyTerrarium() {
+export default function EmptyTerrarium({ dissolving = false }: { dissolving?: boolean }) {
   const setWizardOpen = useTerrariumStore((s) => s.setWizardOpen);
 
   return (
@@ -60,6 +60,25 @@ export default function EmptyTerrarium() {
           animation: et-pulse-hover 2s ease-in-out infinite;
         }
 
+        @keyframes et-screen-fade-in {
+          from { opacity: 0; filter: blur(6px); }
+          to { opacity: 1; filter: blur(0); }
+        }
+
+        @keyframes et-dissolve {
+          0% { opacity: 1; filter: blur(0) saturate(1); transform: scale(1); }
+          100% { opacity: 0; filter: blur(18px) saturate(1.7); transform: scale(1.04); }
+        }
+
+        .et-screen {
+          animation: et-screen-fade-in 380ms ease-out both;
+        }
+
+        .et-screen-dissolving {
+          pointer-events: none;
+          animation: et-dissolve 650ms ease-in both;
+        }
+
         .et-portal:focus-visible {
           outline: 2px solid rgba(139, 92, 246, 0.8);
           outline-offset: 4px;
@@ -67,6 +86,8 @@ export default function EmptyTerrarium() {
       `}</style>
 
       <div
+        className={dissolving ? "et-screen et-screen-dissolving" : "et-screen"}
+        aria-hidden={dissolving}
         style={{
           flex: 1,
           display: "flex",

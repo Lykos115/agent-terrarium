@@ -1,5 +1,8 @@
+import { useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
+import { Application } from "pixi.js";
 import type { Agent } from "../types";
+import { PixiSpriteActor, type SpriteState } from "../modules/sprite-engine";
 import type { AgentVisualPhase } from "./useAgentOfficeLocations";
 import { agentColor, themeForAgent } from "./office-theme";
 
@@ -56,7 +59,7 @@ export function RoomTile({
       type="button"
       onClick={onSelect}
       onDoubleClick={onEnter}
-      className={`pixel-room group relative h-full w-full overflow-hidden rounded border text-left shadow-room transition hover:-translate-y-0.5 ${
+      className={`pixel-room group relative aspect-[4/3] h-full w-full overflow-hidden rounded border text-left shadow-room transition hover:-translate-y-0.5 ${
         selected ? "border-cyanLive ring-2 ring-cyanLive/30" : "border-slate-700/80"
       }`}
       style={
@@ -84,7 +87,7 @@ export function RoomTile({
 
       {visibleAgent && (
         <div className={`absolute transition-all duration-700 ease-in-out ${agentPosition}`}>
-          <PixelAgent agent={visibleAgent} sleeping={agent.state === "sleeping"} />
+          <PixiAgentCanvas agent={visibleAgent} size={76} />
         </div>
       )}
 
@@ -108,12 +111,70 @@ export function PixelAgent({ agent, sleeping = false }: { agent: Agent; sleeping
   );
 }
 
+function PixiAgentCanvas({ agent, size = 64 }: { agent: Agent; size?: number }) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const actorRef = useRef<PixiSpriteActor | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let app: Application | null = null;
+    let actor: PixiSpriteActor | null = null;
+
+    async function mount() {
+      if (!hostRef.current) return;
+      app = new Application();
+      await app.init({
+        width: size,
+        height: size,
+        backgroundAlpha: 0,
+        antialias: false,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+      });
+
+      if (cancelled || !hostRef.current) {
+        app.destroy(true);
+        return;
+      }
+
+      hostRef.current.replaceChildren(app.canvas);
+      actor = new PixiSpriteActor(app, agent.spriteId, Math.max(18, size / 3));
+      actor.setState(agent.state as SpriteState);
+      actor.getContainer().position.set(size / 2, size / 2 + size * 0.08);
+      app.stage.addChild(actor.getContainer());
+      actorRef.current = actor;
+    }
+
+    void mount();
+
+    return () => {
+      cancelled = true;
+      actorRef.current = null;
+      actor?.destroy();
+      app?.destroy(true);
+    };
+  }, [agent.id, agent.spriteId, size]);
+
+  useEffect(() => {
+    actorRef.current?.setState(agent.state as SpriteState);
+  }, [agent.state]);
+
+  return (
+    <div
+      ref={hostRef}
+      className="pointer-events-none pixelated drop-shadow-[0_0_12px_var(--agent)]"
+      style={{ width: size, height: size, "--agent": agentColor(agent) } as CSSProperties}
+      aria-label={`${agent.name} ${agent.state} sprite`}
+    />
+  );
+}
+
 function CommandCommons({ occupants, selected, onSelect }: { occupants: Agent[]; selected?: boolean; onSelect?: () => void }) {
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`pixel-room relative h-full w-full overflow-hidden rounded border bg-[#10142a] text-left shadow-room transition hover:-translate-y-0.5 ${
+      className={`pixel-room relative aspect-[4/3] h-full w-full overflow-hidden rounded border bg-[#10142a] text-left shadow-room transition hover:-translate-y-0.5 ${
         selected ? "border-cyanLive ring-2 ring-cyanLive/30" : "border-cyanLive/30"
       }`}
       style={{ "--accent": "#73ffd8" } as CSSProperties}
@@ -129,7 +190,7 @@ function CommandCommons({ occupants, selected, onSelect }: { occupants: Agent[];
       </div>
       <div className="absolute bottom-[30%] left-[28%] flex gap-3">
         {occupants.map((agent) => (
-          <PixelAgent key={agent.id} agent={agent} />
+          <PixiAgentCanvas key={agent.id} agent={agent} size={52} />
         ))}
       </div>
     </button>
@@ -141,7 +202,7 @@ function EmptyRoom({ slotLabel, selected, onSelect }: { slotLabel?: string; sele
     <button
       type="button"
       onClick={onSelect}
-      className={`pixel-room relative h-full w-full overflow-hidden rounded border bg-[#0b1020] text-left text-slate-500 transition hover:border-slate-500 ${
+      className={`pixel-room relative aspect-[4/3] h-full w-full overflow-hidden rounded border bg-[#0b1020] text-left text-slate-500 transition hover:border-slate-500 ${
         selected ? "border-cyanLive ring-2 ring-cyanLive/30" : "border-slate-800"
       }`}
     >

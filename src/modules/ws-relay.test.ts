@@ -48,14 +48,13 @@ class TestClient {
     this.ws = new WebSocket(url);
     this.ws.addEventListener("message", (e) => {
       const msg = JSON.parse(String(e.data)) as ServerMessage;
+      const waiter = this.waiters.find((w) => w.predicate(msg));
+      if (waiter) {
+        this.waiters = this.waiters.filter((w) => w !== waiter);
+        waiter.resolve(msg);
+        return;
+      }
       this.buffer.push(msg);
-      this.waiters = this.waiters.filter((w) => {
-        if (w.predicate(msg)) {
-          w.resolve(msg);
-          return false;
-        }
-        return true;
-      });
     });
     this.ready = new Promise((resolve, reject) => {
       this.ws.addEventListener("open", () => resolve());
@@ -119,6 +118,30 @@ const sampleConfig: AgentConfig = {
   personality: "helpful",
   modelTier: "Budget",
 };
+
+class MutableHermesGateway implements HermesGateway {
+  states = new Map<string, AgentState>();
+
+  async getAgentStates(): Promise<Map<string, AgentState>> {
+    return new Map(this.states);
+  }
+
+  async *sendChat(_agentId: string, _message: string): AsyncIterable<string> {
+    yield "ok";
+  }
+
+  async createSession(_agentId: string, _personality: string, _modelTier: ModelTier): Promise<string> {
+    return "session";
+  }
+
+  async resetSession(_agentId: string): Promise<string> {
+    return "session-reset";
+  }
+
+  async isReachable(): Promise<boolean> {
+    return true;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -473,6 +496,61 @@ describe("TerrariumWebSocketRelay", () => {
       const err = await c.waitFor((m) => m.type === "error");
       if (err.type !== "error") throw new Error();
       expect(err.data.message).toMatch(/requires/i);
+    });
+  });
+
+  describe("agent state polling", () => {
+    it("broadcasts agent_state when Hermes reports a changed state", async () => {
+      const hermes = new MutableHermesGateway();
+      relay.setHermes(hermes);
+      const agent = await store.createAgent(sampleConfig);
+      const c = await connect();
+      await c.waitFor((m) => m.type === "agent_list");
+
+      hermes.states.set(agent.id, "thinking");
+      await relay.pollAgentStates();
+
+      const msg = await c.waitFor((m) => m.type === "agent_state");
+      if (msg.type !== "agent_state") throw new Error();
+      expect(msg.data).toEqual({
+        agentId: agent.id,
+        state: "thinking",
+        statusText: "Thinking…",
+      });
+    });
+
+    it("does not rebroadcast unchanged states", async () => {
+      const hermes = new MutableHermesGateway();
+      relay.setHermes(hermes);
+      const agent = await store.createAgent(sampleConfig);
+      const c = await connect();
+      await c.waitFor((m) => m.type === "agent_list");
+
+      hermes.states.set(agent.id, "working");
+      await relay.pollAgentStates();
+      await c.waitFor((m) => m.type === "agent_state");
+      await relay.pollAgentStates();
+
+      expect(c.all().some((m) => m.type === "agent_state")).toBe(false);
+    });
+
+    it("broadcasts independent states for multiple agents", async () => {
+      const hermes = new MutableHermesGateway();
+      relay.setHermes(hermes);
+      const a = await store.createAgent({ ...sampleConfig, name: "A" });
+      const b = await store.createAgent({ ...sampleConfig, name: "B" });
+      const c = await connect();
+      await c.waitFor((m) => m.type === "agent_list");
+
+      hermes.states.set(a.id, "thinking");
+      hermes.states.set(b.id, "working");
+      await relay.pollAgentStates();
+
+      const states = [
+        await c.waitFor((m) => m.type === "agent_state"),
+        await c.waitFor((m) => m.type === "agent_state"),
+      ];
+      expect(states.map((m) => m.type === "agent_state" ? m.data.state : "").sort()).toEqual(["thinking", "working"]);
     });
   });
 

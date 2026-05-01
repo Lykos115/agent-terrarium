@@ -242,6 +242,21 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
         return;
       }
 
+      case "agent_state": {
+        const { agentId, state, statusText } = message.data;
+        const current = get().agents.get(agentId);
+        if (!current) return;
+        const agents = new Map(get().agents);
+        agents.set(agentId, {
+          ...current,
+          state,
+          statusText: statusText ?? current.statusText,
+          updatedAt: new Date().toISOString(),
+        });
+        set(withAgents(agents));
+        return;
+      }
+
       case "chat_chunk": {
         const { agentId, messageId, content } = message.data;
         const streaming = new Map(get().streamingMessages);

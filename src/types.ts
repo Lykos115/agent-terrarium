@@ -61,6 +61,7 @@ export type ServerMessage =
   | { type: "agent_archived"; data: { agentId: string } }
   | { type: "agent_restored"; data: { agent: Agent } }
   | { type: "agent_updated"; data: { agent: Agent } }
+  | { type: "agent_state"; data: { agentId: string; state: AgentState; statusText?: string } }
   | { type: "chat_chunk"; data: { agentId: string; messageId: string; content: string } }
   | { type: "chat_end"; data: { agentId: string; messageId: string } }
   | { type: "chat_error"; data: { agentId: string; message: string } }
