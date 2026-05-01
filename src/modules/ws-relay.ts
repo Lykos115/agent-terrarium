@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import type { AgentStore } from "./agent-store";
 import { AgentNotFoundError } from "./agent-store";
+import type { HermesGateway } from "./hermes-gateway";
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -91,8 +92,14 @@ function validateAgentConfig(
  */
 export class TerrariumWebSocketRelay implements WebSocketRelay {
   private readonly clients = new Set<ServerWebSocket<unknown>>();
+  private hermes: HermesGateway | null = null;
 
   constructor(private readonly store: AgentStore) {}
+
+  /** Attach a Hermes gateway for chat routing. */
+  setHermes(hermes: HermesGateway): void {
+    this.hermes = hermes;
+  }
 
   connectionCount(): number {
     return this.clients.size;
@@ -225,6 +232,88 @@ export class TerrariumWebSocketRelay implements WebSocketRelay {
         try {
           const agent = await this.store.updateAgent(id, changes as Partial<Agent>);
           this.broadcast({ type: "agent_updated", data: { agent } });
+        } catch (err) {
+          this.sendNotFoundOrRethrow(ws, err);
+        }
+        return;
+      }
+
+      case "chat": {
+        const agentId = msg.data?.agentId;
+        const message = msg.data?.message;
+        if (typeof agentId !== "string" || typeof message !== "string" || !message.trim()) {
+          this.sendTo(ws, {
+            type: "error",
+            data: { message: "chat requires agentId and message", code: "invalid_chat" },
+          });
+          return;
+        }
+        if (!this.hermes) {
+          this.sendTo(ws, {
+            type: "chat_error",
+            data: { agentId, message: "Hermes is not connected" },
+          });
+          return;
+        }
+
+        // Verify agent exists
+        const agent = await this.store.getAgent(agentId);
+        if (!agent) {
+          this.sendTo(ws, {
+            type: "chat_error",
+            data: { agentId, message: `Agent not found: ${agentId}` },
+          });
+          return;
+        }
+
+        // Stream response from Hermes back to the requesting client
+        const messageId = `resp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        try {
+          for await (const chunk of this.hermes.sendChat(agentId, message.trim())) {
+            this.sendTo(ws, {
+              type: "chat_chunk",
+              data: { agentId, messageId, content: chunk },
+            });
+          }
+          this.sendTo(ws, {
+            type: "chat_end",
+            data: { agentId, messageId },
+          });
+        } catch (err) {
+          this.sendTo(ws, {
+            type: "chat_error",
+            data: {
+              agentId,
+              message: err instanceof Error ? err.message : String(err),
+            },
+          });
+        }
+        return;
+      }
+
+      case "reset_context": {
+        const agentId = msg.data?.agentId;
+        if (typeof agentId !== "string") {
+          this.sendTo(ws, {
+            type: "error",
+            data: { message: "reset_context requires agentId", code: "invalid_id" },
+          });
+          return;
+        }
+        const resetAgent = await this.store.getAgent(agentId);
+        if (!resetAgent) {
+          this.sendTo(ws, {
+            type: "error",
+            data: { message: `Agent not found: ${agentId}`, code: "not_found" },
+          });
+          return;
+        }
+        try {
+          if (this.hermes) {
+            const newSessionId = await this.hermes.resetSession(agentId);
+            await this.store.updateAgent(agentId, { hermesSessionId: newSessionId } as Partial<Agent>);
+          }
+          this.sendTo(ws, { type: "context_reset", data: { agentId } });
         } catch (err) {
           this.sendNotFoundOrRethrow(ws, err);
         }

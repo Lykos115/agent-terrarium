@@ -52,7 +52,7 @@ export default function App() {
         ) : route.name === "grid" ? (
           <DollhouseGrid />
         ) : route.name === "room" ? (
-          <AgentRoomView agentId={route.agentId} />
+          <AgentRoomView agentId={route.agentId} ws={ws} />
         ) : (
           <AgentEditorPlaceholder agentId={route.agentId} />
         )}
@@ -173,12 +173,12 @@ function LoadingView() {
   );
 }
 
-function AgentRoomView({ agentId }: { agentId: string }) {
+function AgentRoomView({ agentId, ws }: { agentId: string; ws: React.MutableRefObject<WebSocket | null> }) {
   const agent = useTerrariumStore((s) => s.agents.get(agentId));
   if (!agent) {
     return <div style={{ padding: 24 }}>Agent not found.</div>;
   }
-  return <AgentRoom agent={agent} />;
+  return <AgentRoom agent={agent} ws={ws} />;
 }
 
 function AgentEditorPlaceholder({ agentId }: { agentId: string }) {

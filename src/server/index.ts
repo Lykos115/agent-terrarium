@@ -7,6 +7,7 @@ import {
   SqliteAgentStore,
   seedAgents,
 } from "../modules/agent-store";
+import { HermesGatewayAdapter, StubHermesGateway } from "../modules/hermes-gateway";
 
 const PORT = 3000;
 const VITE_PORT = 5173;
@@ -21,8 +22,15 @@ await seedAgents(store);
 const seedCount = (await store.listAgents()).length;
 console.log(`[db] SQLite ready — ${seedCount} agent(s) loaded`);
 
-// Init WebSocket relay backed by the agent store
+// Init Hermes gateway
+const HERMES_URL = process.env.HERMES_URL ?? "http://localhost:8642";
+const HERMES_API_KEY = process.env.HERMES_API_KEY ?? "";
+const hermes = new HermesGatewayAdapter(HERMES_URL, HERMES_API_KEY);
+console.log(`[hermes] Gateway configured for ${HERMES_URL}`);
+
+// Init WebSocket relay backed by the agent store + Hermes
 const relay = new TerrariumWebSocketRelay(store);
+relay.setHermes(hermes);
 
 // Path to static files
 const distDir = join(import.meta.dir, "../../dist");

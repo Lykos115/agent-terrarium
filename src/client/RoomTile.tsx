@@ -14,6 +14,8 @@ interface RoomTileProps {
   slotLabel?: string;
   phase?: AgentVisualPhase;
   onSelect?: () => void;
+  /** Navigate into the room view (double-click). */
+  onEnter?: () => void;
 }
 
 export function RoomTile({
@@ -25,6 +27,7 @@ export function RoomTile({
   slotLabel,
   phase = "home",
   onSelect,
+  onEnter,
 }: RoomTileProps) {
   if (variant === "commons") {
     return <CommandCommons occupants={occupants ?? (occupant ? [occupant] : [])} selected={selected} onSelect={onSelect} />;
@@ -52,6 +55,7 @@ export function RoomTile({
     <button
       type="button"
       onClick={onSelect}
+      onDoubleClick={onEnter}
       className={`pixel-room group relative h-full w-full overflow-hidden rounded border text-left shadow-room transition hover:-translate-y-0.5 ${
         selected ? "border-cyanLive ring-2 ring-cyanLive/30" : "border-slate-700/80"
       }`}

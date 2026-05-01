@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Agent, AgentConfig, ClientMessage, ServerMessage } from "../types";
+import type { Agent, AgentConfig, ChatMessage, ClientMessage, ServerMessage } from "../types";
 
 // ---------------------------------------------------------------------------
 // Route model
@@ -47,6 +47,18 @@ export interface TerrariumState {
   /** True until the first `agent_list` message has been applied. */
   agentListLoaded: boolean;
 
+  // Chat
+  /** Chat message history per agent, keyed by agentId. */
+  chatHistory: Map<string, ChatMessage[]>;
+  /**
+   * In-progress streaming assistant message per agent.
+   * While streaming, this holds the partial message being assembled from
+   * `chat_chunk` events. On `chat_end`, it's moved to chatHistory.
+   */
+  streamingMessages: Map<string, ChatMessage>;
+  /** Set of agentIds currently waiting for or receiving a response. */
+  chatLoading: Set<string>;
+
   // Navigation
   route: Route;
 
@@ -69,6 +81,10 @@ export interface TerrariumState {
   setRoute: (route: Route) => void;
   clearError: () => void;
   setWizardOpen: (open: boolean) => void;
+  /** Add a user message to chat history (called before sending to WS). */
+  addUserMessage: (agentId: string, content: string) => string;
+  /** Clear chat history for an agent (on context reset). */
+  clearChatHistory: (agentId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,12 +118,20 @@ function withAgents(agents: Map<string, Agent>): {
  * Immutable update helpers — Zustand accepts either partial state or an updater.
  * Using functions keeps each transition small and testable.
  */
+/** Generate a unique-enough ID for chat messages. */
+function chatMsgId(): string {
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export const useTerrariumStore = create<TerrariumState>((set, get) => ({
   connection: "connecting",
   agents: new Map(),
   agentList: [],
   archivedAgents: new Map(),
   agentListLoaded: false,
+  chatHistory: new Map(),
+  streamingMessages: new Map(),
+  chatLoading: new Set(),
   route: { name: "grid" },
   lastError: null,
   ui: { wizardOpen: false },
@@ -119,6 +143,33 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
   clearError: () => set({ lastError: null }),
 
   setWizardOpen: (open) => set({ ui: { wizardOpen: open } }),
+
+  addUserMessage: (agentId, content) => {
+    const id = chatMsgId();
+    const msg: ChatMessage = {
+      id,
+      agentId,
+      role: "user",
+      content,
+      timestamp: new Date().toISOString(),
+    };
+    const history = new Map(get().chatHistory);
+    history.set(agentId, [...(history.get(agentId) ?? []), msg]);
+    const loading = new Set(get().chatLoading);
+    loading.add(agentId);
+    set({ chatHistory: history, chatLoading: loading });
+    return id;
+  },
+
+  clearChatHistory: (agentId) => {
+    const history = new Map(get().chatHistory);
+    history.delete(agentId);
+    const streaming = new Map(get().streamingMessages);
+    streaming.delete(agentId);
+    const loading = new Set(get().chatLoading);
+    loading.delete(agentId);
+    set({ chatHistory: history, streamingMessages: streaming, chatLoading: loading });
+  },
 
   applyServerMessage: (message) => {
     switch (message.type) {
@@ -178,7 +229,6 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
       case "agent_updated": {
         const agent = message.data.agent;
         if (agent.archived) {
-          // Shouldn't normally happen (archive has its own event) but handle it.
           const agents = new Map(get().agents);
           agents.delete(agent.id);
           const archivedAgents = new Map(get().archivedAgents);
@@ -189,6 +239,74 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
           agents.set(agent.id, agent);
           set(withAgents(agents));
         }
+        return;
+      }
+
+      case "chat_chunk": {
+        const { agentId, messageId, content } = message.data;
+        const streaming = new Map(get().streamingMessages);
+        const existing = streaming.get(agentId);
+        if (existing) {
+          streaming.set(agentId, {
+            ...existing,
+            content: existing.content + content,
+          });
+        } else {
+          streaming.set(agentId, {
+            id: messageId,
+            agentId,
+            role: "assistant",
+            content,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        set({ streamingMessages: streaming });
+        return;
+      }
+
+      case "chat_end": {
+        const { agentId, messageId } = message.data;
+        const streaming = new Map(get().streamingMessages);
+        const completed = streaming.get(agentId);
+        streaming.delete(agentId);
+
+        const history = new Map(get().chatHistory);
+        if (completed) {
+          history.set(agentId, [
+            ...(history.get(agentId) ?? []),
+            { ...completed, id: messageId },
+          ]);
+        }
+
+        const loading = new Set(get().chatLoading);
+        loading.delete(agentId);
+        set({ streamingMessages: streaming, chatHistory: history, chatLoading: loading });
+        return;
+      }
+
+      case "chat_error": {
+        const { agentId, message: errMsg } = message.data;
+        const streaming = new Map(get().streamingMessages);
+        streaming.delete(agentId);
+        const loading = new Set(get().chatLoading);
+        loading.delete(agentId);
+        set({
+          streamingMessages: streaming,
+          chatLoading: loading,
+          lastError: `Chat error (${agentId}): ${errMsg}`,
+        });
+        return;
+      }
+
+      case "context_reset": {
+        const { agentId } = message.data;
+        const history = new Map(get().chatHistory);
+        history.delete(agentId);
+        const streaming = new Map(get().streamingMessages);
+        streaming.delete(agentId);
+        const loading = new Set(get().chatLoading);
+        loading.delete(agentId);
+        set({ chatHistory: history, streamingMessages: streaming, chatLoading: loading });
         return;
       }
 
@@ -221,4 +339,12 @@ export function requestArchiveAgent(ws: WebSocket, agentId: string): void {
 
 export function requestRestoreAgent(ws: WebSocket, agentId: string): void {
   sendClientMessage(ws, { type: "restore_agent", data: { agentId } });
+}
+
+export function sendChatMessage(ws: WebSocket, agentId: string, message: string): void {
+  sendClientMessage(ws, { type: "chat", data: { agentId, message } });
+}
+
+export function requestResetContext(ws: WebSocket, agentId: string): void {
+  sendClientMessage(ws, { type: "reset_context", data: { agentId } });
 }

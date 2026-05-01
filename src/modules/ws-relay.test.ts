@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
 import { TerrariumWebSocketRelay } from "./ws-relay";
 import { SqliteAgentStore, runMigrations } from "./agent-store";
-import type { ServerMessage, ClientMessage, AgentConfig } from "../types";
+import type { ServerMessage, ClientMessage, AgentConfig, AgentState, ModelTier } from "../types";
+import type { HermesGateway } from "./hermes-gateway";
 
 // ---------------------------------------------------------------------------
 // Test harness: a real Bun WebSocket server wired to a real relay, plus a
@@ -373,6 +374,146 @@ describe("TerrariumWebSocketRelay", () => {
       ]);
       expect(aMsg.type).toBe("pong");
       expect(bMsg.type).toBe("pong");
+    });
+  });
+
+  describe("chat", () => {
+    /** Fake Hermes that yields predetermined chunks. */
+    class FakeHermes implements HermesGateway {
+      chunks: string[] = ["Hello", " world"];
+      shouldFail = false;
+
+      async isReachable() { return true; }
+      async getAgentStates() { return new Map<string, AgentState>(); }
+      async createSession() { return "fake-session-id"; }
+      async resetSession() { return "fake-reset-session-id"; }
+      async *sendChat(): AsyncIterable<string> {
+        if (this.shouldFail) throw new Error("Hermes exploded");
+        for (const chunk of this.chunks) yield chunk;
+      }
+    }
+
+    it("streams chat_chunk messages and ends with chat_end", async () => {
+      const hermes = new FakeHermes();
+      relay.setHermes(hermes);
+
+      const agent = await store.createAgent(sampleConfig);
+      const c = await connect();
+      await c.waitFor((m) => m.type === "agent_list");
+
+      c.send({ type: "chat", data: { agentId: agent.id, message: "hi" } });
+
+      const chunk1 = await c.waitFor((m) => m.type === "chat_chunk");
+      if (chunk1.type !== "chat_chunk") throw new Error();
+      expect(chunk1.data.content).toBe("Hello");
+      expect(chunk1.data.agentId).toBe(agent.id);
+
+      const chunk2 = await c.waitFor((m) => m.type === "chat_chunk" && m !== chunk1);
+      if (chunk2.type !== "chat_chunk") throw new Error();
+      expect(chunk2.data.content).toBe(" world");
+
+      const end = await c.waitFor((m) => m.type === "chat_end");
+      if (end.type !== "chat_end") throw new Error();
+      expect(end.data.agentId).toBe(agent.id);
+      expect(end.data.messageId).toBe(chunk1.data.messageId);
+    });
+
+    it("sends chat_error when Hermes is not connected", async () => {
+      // Don't call relay.setHermes()
+      const agent = await store.createAgent(sampleConfig);
+      const c = await connect();
+      await c.waitFor((m) => m.type === "agent_list");
+
+      c.send({ type: "chat", data: { agentId: agent.id, message: "hi" } });
+
+      const err = await c.waitFor((m) => m.type === "chat_error");
+      if (err.type !== "chat_error") throw new Error();
+      expect(err.data.message).toMatch(/hermes/i);
+    });
+
+    it("sends chat_error when Hermes throws during streaming", async () => {
+      const hermes = new FakeHermes();
+      hermes.shouldFail = true;
+      relay.setHermes(hermes);
+
+      const agent = await store.createAgent(sampleConfig);
+      const c = await connect();
+      await c.waitFor((m) => m.type === "agent_list");
+
+      c.send({ type: "chat", data: { agentId: agent.id, message: "hi" } });
+
+      const err = await c.waitFor((m) => m.type === "chat_error");
+      if (err.type !== "chat_error") throw new Error();
+      expect(err.data.message).toMatch(/exploded/i);
+    });
+
+    it("sends chat_error for unknown agent", async () => {
+      const hermes = new FakeHermes();
+      relay.setHermes(hermes);
+
+      const c = await connect();
+      await c.waitFor((m) => m.type === "agent_list");
+
+      c.send({ type: "chat", data: { agentId: "nonexistent", message: "hi" } });
+
+      const err = await c.waitFor((m) => m.type === "chat_error");
+      if (err.type !== "chat_error") throw new Error();
+      expect(err.data.message).toMatch(/not found/i);
+    });
+
+    it("rejects empty message", async () => {
+      const hermes = new FakeHermes();
+      relay.setHermes(hermes);
+
+      const c = await connect();
+      await c.waitFor((m) => m.type === "agent_list");
+
+      c.send({ type: "chat", data: { agentId: "x", message: "  " } });
+
+      const err = await c.waitFor((m) => m.type === "error");
+      if (err.type !== "error") throw new Error();
+      expect(err.data.message).toMatch(/requires/i);
+    });
+  });
+
+  describe("reset_context", () => {
+    class FakeHermes implements HermesGateway {
+      resetCalled = false;
+      async isReachable() { return true; }
+      async getAgentStates() { return new Map<string, AgentState>(); }
+      async createSession() { return "fake-session-id"; }
+      async resetSession() { this.resetCalled = true; return "fresh-session-id"; }
+      async *sendChat(): AsyncIterable<string> { yield "test"; }
+    }
+
+    it("sends context_reset to the client", async () => {
+      const hermes = new FakeHermes();
+      relay.setHermes(hermes);
+
+      const agent = await store.createAgent(sampleConfig);
+      const c = await connect();
+      await c.waitFor((m) => m.type === "agent_list");
+
+      c.send({ type: "reset_context", data: { agentId: agent.id } });
+
+      const msg = await c.waitFor((m) => m.type === "context_reset");
+      if (msg.type !== "context_reset") throw new Error();
+      expect(msg.data.agentId).toBe(agent.id);
+      expect(hermes.resetCalled).toBe(true);
+    });
+
+    it("sends error for unknown agent", async () => {
+      const hermes = new FakeHermes();
+      relay.setHermes(hermes);
+
+      const c = await connect();
+      await c.waitFor((m) => m.type === "agent_list");
+
+      c.send({ type: "reset_context", data: { agentId: "nope" } });
+
+      const err = await c.waitFor((m) => m.type === "error");
+      if (err.type !== "error") throw new Error();
+      expect(err.data.message).toMatch(/not found/i);
     });
   });
 });

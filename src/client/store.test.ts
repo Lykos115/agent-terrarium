@@ -30,6 +30,9 @@ beforeEach(() => {
     agentList: [],
     archivedAgents: new Map(),
     agentListLoaded: false,
+    chatHistory: new Map(),
+    streamingMessages: new Map(),
+    chatLoading: new Set(),
     route: { name: "grid" },
     lastError: null,
     ui: { wizardOpen: false },
@@ -239,5 +242,129 @@ describe("store: route", () => {
       name: "room",
       agentId: "abc",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
+
+describe("store: chat", () => {
+  const apply = (m: ServerMessage) =>
+    useTerrariumStore.getState().applyServerMessage(m);
+
+  it("addUserMessage adds a user message and sets chatLoading", () => {
+    const id = useTerrariumStore.getState().addUserMessage("a1", "hello");
+    const s = useTerrariumStore.getState();
+    expect(id).toMatch(/^msg-/);
+    expect(s.chatHistory.get("a1")).toHaveLength(1);
+    expect(s.chatHistory.get("a1")![0].role).toBe("user");
+    expect(s.chatHistory.get("a1")![0].content).toBe("hello");
+    expect(s.chatLoading.has("a1")).toBe(true);
+  });
+
+  it("addUserMessage appends to existing history", () => {
+    useTerrariumStore.getState().addUserMessage("a1", "first");
+    useTerrariumStore.getState().addUserMessage("a1", "second");
+    expect(useTerrariumStore.getState().chatHistory.get("a1")).toHaveLength(2);
+  });
+
+  it("chat_chunk creates a streaming message on first chunk", () => {
+    apply({
+      type: "chat_chunk",
+      data: { agentId: "a1", messageId: "m1", content: "Hello" },
+    });
+    const s = useTerrariumStore.getState();
+    expect(s.streamingMessages.has("a1")).toBe(true);
+    expect(s.streamingMessages.get("a1")!.content).toBe("Hello");
+    expect(s.streamingMessages.get("a1")!.role).toBe("assistant");
+  });
+
+  it("chat_chunk appends content to existing streaming message", () => {
+    apply({
+      type: "chat_chunk",
+      data: { agentId: "a1", messageId: "m1", content: "Hel" },
+    });
+    apply({
+      type: "chat_chunk",
+      data: { agentId: "a1", messageId: "m1", content: "lo!" },
+    });
+    expect(useTerrariumStore.getState().streamingMessages.get("a1")!.content).toBe(
+      "Hello!",
+    );
+  });
+
+  it("chat_end moves streaming message to history and clears loading", () => {
+    // Set up loading state
+    useTerrariumStore.getState().addUserMessage("a1", "hi");
+    // Simulate streaming
+    apply({
+      type: "chat_chunk",
+      data: { agentId: "a1", messageId: "m1", content: "response" },
+    });
+    apply({
+      type: "chat_end",
+      data: { agentId: "a1", messageId: "m1" },
+    });
+    const s = useTerrariumStore.getState();
+    expect(s.streamingMessages.has("a1")).toBe(false);
+    expect(s.chatLoading.has("a1")).toBe(false);
+    // History: user message + assistant response
+    expect(s.chatHistory.get("a1")).toHaveLength(2);
+    expect(s.chatHistory.get("a1")![1].role).toBe("assistant");
+    expect(s.chatHistory.get("a1")![1].content).toBe("response");
+  });
+
+  it("chat_error clears streaming and loading, sets lastError", () => {
+    useTerrariumStore.getState().addUserMessage("a1", "hi");
+    apply({
+      type: "chat_chunk",
+      data: { agentId: "a1", messageId: "m1", content: "partial" },
+    });
+    apply({
+      type: "chat_error",
+      data: { agentId: "a1", message: "Hermes down" },
+    });
+    const s = useTerrariumStore.getState();
+    expect(s.streamingMessages.has("a1")).toBe(false);
+    expect(s.chatLoading.has("a1")).toBe(false);
+    expect(s.lastError).toContain("Hermes down");
+  });
+
+  it("context_reset clears chat history for that agent", () => {
+    useTerrariumStore.getState().addUserMessage("a1", "hi");
+    useTerrariumStore.getState().addUserMessage("a2", "hey");
+    apply({ type: "context_reset", data: { agentId: "a1" } });
+    const s = useTerrariumStore.getState();
+    expect(s.chatHistory.has("a1")).toBe(false);
+    // a2 should be untouched
+    expect(s.chatHistory.get("a2")).toHaveLength(1);
+  });
+
+  it("clearChatHistory removes all chat state for an agent", () => {
+    useTerrariumStore.getState().addUserMessage("a1", "hi");
+    apply({
+      type: "chat_chunk",
+      data: { agentId: "a1", messageId: "m1", content: "streaming" },
+    });
+    useTerrariumStore.getState().clearChatHistory("a1");
+    const s = useTerrariumStore.getState();
+    expect(s.chatHistory.has("a1")).toBe(false);
+    expect(s.streamingMessages.has("a1")).toBe(false);
+    expect(s.chatLoading.has("a1")).toBe(false);
+  });
+
+  it("chat state is isolated per agent", () => {
+    useTerrariumStore.getState().addUserMessage("a1", "msg to a1");
+    useTerrariumStore.getState().addUserMessage("a2", "msg to a2");
+    apply({
+      type: "chat_chunk",
+      data: { agentId: "a1", messageId: "m1", content: "from a1" },
+    });
+    const s = useTerrariumStore.getState();
+    expect(s.chatHistory.get("a1")).toHaveLength(1);
+    expect(s.chatHistory.get("a2")).toHaveLength(1);
+    expect(s.streamingMessages.has("a1")).toBe(true);
+    expect(s.streamingMessages.has("a2")).toBe(false);
   });
 });

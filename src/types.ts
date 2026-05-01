@@ -42,6 +42,16 @@ export interface AgentConfig {
 // client (useTerrarium hook).
 // ---------------------------------------------------------------------------
 
+/** A single chat message in the conversation history. */
+export interface ChatMessage {
+  id: string;
+  agentId: string;
+  role: "user" | "assistant";
+  content: string;
+  /** ISO timestamp */
+  timestamp: string;
+}
+
 /** Messages the server sends to the client. */
 export type ServerMessage =
   | { type: "connected" }
@@ -51,6 +61,10 @@ export type ServerMessage =
   | { type: "agent_archived"; data: { agentId: string } }
   | { type: "agent_restored"; data: { agent: Agent } }
   | { type: "agent_updated"; data: { agent: Agent } }
+  | { type: "chat_chunk"; data: { agentId: string; messageId: string; content: string } }
+  | { type: "chat_end"; data: { agentId: string; messageId: string } }
+  | { type: "chat_error"; data: { agentId: string; message: string } }
+  | { type: "context_reset"; data: { agentId: string } }
   | { type: "error"; data: { message: string; code?: string } };
 
 /** Messages the client sends to the server. */
@@ -63,4 +77,6 @@ export type ClientMessage =
   | {
       type: "update_agent";
       data: { agentId: string; changes: Partial<Agent> };
-    };
+    }
+  | { type: "chat"; data: { agentId: string; message: string } }
+  | { type: "reset_context"; data: { agentId: string } };

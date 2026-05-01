@@ -16,6 +16,7 @@ const ROOM_SLOTS = [0, 1, 2, 3, 5, 6, 7, 8];
 export function DollhouseGrid() {
   const agents = useTerrariumStore((s) => s.agentList);
   const setWizardOpen = useTerrariumStore((s) => s.setWizardOpen);
+  const setRoute = useTerrariumStore((s) => s.setRoute);
   const connection = useTerrariumStore((s) => s.connection);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [selection, setSelection] = useState<Selection>({ type: "overview" });
@@ -82,6 +83,7 @@ export function DollhouseGrid() {
                   slotLabel={`Room ${slot + 1}`}
                   selected={selection.type === "room" && selection.slot === slot}
                   onSelect={() => setSelection({ type: "room", slot, agent })}
+                  onEnter={agent ? () => setRoute({ name: "room", agentId: agent.id }) : undefined}
                 />
               );
             })}
@@ -103,6 +105,7 @@ export function DollhouseGrid() {
         selection={selection}
         agents={agents}
         onToggle={() => setInspectorOpen((open) => !open)}
+        onEnterRoom={(agentId) => setRoute({ name: "room", agentId })}
       />
     </div>
   );
@@ -170,11 +173,13 @@ function Inspector({
   selection,
   agents,
   onToggle,
+  onEnterRoom,
 }: {
   open: boolean;
   selection: Selection;
   agents: Agent[];
   onToggle: () => void;
+  onEnterRoom?: (agentId: string) => void;
 }) {
   return (
     <aside className={`${open ? "block" : "hidden lg:block"} border-t border-gridline bg-[#070b16] lg:border-l lg:border-t-0`}>
@@ -187,7 +192,7 @@ function Inspector({
       <div className="space-y-4 p-4">
         {selection.type === "overview" && <OverviewPanel agents={agents} />}
         {selection.type === "commons" && <CommonsPanel agents={agents} />}
-        {selection.type === "room" && <RoomPanel slot={selection.slot} agent={selection.agent} />}
+        {selection.type === "room" && <RoomPanel slot={selection.slot} agent={selection.agent} onEnterRoom={onEnterRoom} />}
       </div>
     </aside>
   );
@@ -229,7 +234,7 @@ function CommonsPanel({ agents }: { agents: Agent[] }) {
   );
 }
 
-function RoomPanel({ slot, agent }: { slot: number; agent?: Agent }) {
+function RoomPanel({ slot, agent, onEnterRoom }: { slot: number; agent?: Agent; onEnterRoom?: (agentId: string) => void }) {
   if (!agent) {
     return (
       <>
@@ -254,8 +259,11 @@ function RoomPanel({ slot, agent }: { slot: number; agent?: Agent }) {
       </div>
       <Metric label="State" value={agent.state} />
       <Metric label="Model" value={agent.modelTier} />
-      <button className="w-full rounded border border-dashed border-slate-700 px-3 py-2 text-sm text-slate-400" disabled>
-        Theme override / poster upload coming next
+      <button
+        onClick={() => onEnterRoom?.(agent.id)}
+        className="w-full rounded border border-blue-400/45 bg-blue-400/5 px-3 py-2 text-sm font-semibold text-blue-200 transition hover:border-cyanLive hover:text-cyanLive"
+      >
+        💬 Enter Room
       </button>
     </>
   );

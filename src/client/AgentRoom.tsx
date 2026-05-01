@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Application } from "pixi.js";
 import { PixiRoom, PixiSpriteActor } from "../modules/sprite-engine";
@@ -9,10 +9,12 @@ import {
   type RoomLook,
   useRoomCustomization,
 } from "./room-customization";
+import { ChatPanel } from "./ChatPanel";
 
-export function AgentRoom({ agent }: { agent: Agent }) {
+export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObject<WebSocket | null> }) {
   const setRoute = useTerrariumStore((s) => s.setRoute);
   const [room, setRoom] = useRoomCustomization(agent.id);
+  const [chatOpen, setChatOpen] = useState(false);
   const look = ROOM_LOOKS[room.look];
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
@@ -102,13 +104,70 @@ export function AgentRoom({ agent }: { agent: Agent }) {
             overflow: "hidden",
             background: "#111123",
             boxShadow: `0 24px 80px ${look.glow}`,
+            position: "relative",
           }}
         >
           <RoomScene agent={agent} roomImage={room.imageDataUrl} look={room.look}>
             <div ref={canvasRef} style={{ position: "absolute", inset: 0, zIndex: 5 }} />
           </RoomScene>
+
+          {/* Talk button overlay */}
+          {!chatOpen && (
+            <button
+              onClick={() => setChatOpen(true)}
+              style={{
+                position: "absolute",
+                bottom: 18,
+                right: 18,
+                zIndex: 10,
+                padding: "10px 20px",
+                borderRadius: 12,
+                border: "1px solid rgba(107, 157, 255, 0.5)",
+                background: "rgba(107, 157, 255, 0.18)",
+                color: "#b8d0ff",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                backdropFilter: "blur(8px)",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(107, 157, 255, 0.32)";
+                e.currentTarget.style.color = "#fff";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(107, 157, 255, 0.18)";
+                e.currentTarget.style.color = "#b8d0ff";
+              }}
+            >
+              💬 Talk
+            </button>
+          )}
         </section>
 
+        {/* Right panel: Chat or Room Settings */}
+        {chatOpen ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 420 }}>
+            <button
+              onClick={() => setChatOpen(false)}
+              style={{
+                alignSelf: "flex-end",
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: "1px solid #3a3d66",
+                background: "rgba(255,255,255,0.04)",
+                color: "#9294b8",
+                fontSize: 11,
+                cursor: "pointer",
+              }}
+            >
+              ← Settings
+            </button>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <ChatPanel agent={agent} ws={ws} />
+            </div>
+          </div>
+        ) : (
         <aside
           style={{
             border: "1px solid #2f3159",
@@ -164,6 +223,7 @@ export function AgentRoom({ agent }: { agent: Agent }) {
             </button>
           )}
         </aside>
+        )}
       </div>
     </div>
   );
