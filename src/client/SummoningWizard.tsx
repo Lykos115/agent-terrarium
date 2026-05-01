@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useTerrariumStore } from "./store";
 import {
   SPECIALTIES,
@@ -28,7 +28,18 @@ export function SummoningWizard({
 }) {
   const wizardOpen = useTerrariumStore((s) => s.ui.wizardOpen);
   const setWizardOpen = useTerrariumStore((s) => s.setWizardOpen);
-  const agents = useTerrariumStore((s) => s.agentList());
+  // Select the stable Map reference and derive the sorted array locally.
+  // Calling s.agentList() directly in the selector creates a fresh array
+  // every snapshot — Zustand/useSyncExternalStore then enters an infinite
+  // re-render loop ("The result of getSnapshot should be cached").
+  const agentsMap = useTerrariumStore((s) => s.agents);
+  const agents = useMemo(
+    () =>
+      Array.from(agentsMap.values()).sort((a, b) =>
+        a.createdAt.localeCompare(b.createdAt),
+      ),
+    [agentsMap],
+  );
 
   const [step, setStep] = useState(1);
   const [selectedSpecialty, setSelectedSpecialty] = useState<Specialty | null>(
