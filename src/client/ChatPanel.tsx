@@ -310,19 +310,43 @@ function CodeBlock({ code, language, compact = true }: { code: string; language:
 }
 
 function renderInline(text: string): React.ReactNode[] {
-  const parts = text.split(/(`[^`]+`)/g);
-  return parts.flatMap((part, i) => {
-    if (part.startsWith("`") && part.endsWith("`")) {
-      return [<code key={i} style={inlineCodeStyle}>{part.slice(1, -1)}</code>];
+  const nodes: React.ReactNode[] = [];
+  const tokenPattern = /(`[^`]+`|\[[^\]]+\]\([^\s)]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  let lastIndex = 0;
+  let index = 0;
+
+  for (const match of text.matchAll(tokenPattern)) {
+    const token = match[0];
+    const start = match.index ?? 0;
+    if (start > lastIndex) {
+      nodes.push(<span key={`t-${index++}`}>{text.slice(lastIndex, start)}</span>);
     }
-    const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
-    return boldParts.map((bp, j) => {
-      if (bp.startsWith("**") && bp.endsWith("**")) {
-        return <strong key={`${i}-${j}`}>{bp.slice(2, -2)}</strong>;
+
+    if (token.startsWith("`") && token.endsWith("`")) {
+      nodes.push(<code key={`t-${index++}`} style={inlineCodeStyle}>{token.slice(1, -1)}</code>);
+    } else if (token.startsWith("**") && token.endsWith("**")) {
+      nodes.push(<strong key={`t-${index++}`}>{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      nodes.push(<em key={`t-${index++}`}>{token.slice(1, -1)}</em>);
+    } else {
+      const link = token.match(/^\[([^\]]+)\]\(([^\s)]+)\)$/);
+      if (link) {
+        nodes.push(
+          <a key={`t-${index++}`} href={link[2]} target="_blank" rel="noreferrer" style={linkStyle}>
+            {link[1]}
+          </a>,
+        );
+      } else {
+        nodes.push(<span key={`t-${index++}`}>{token}</span>);
       }
-      return <span key={`${i}-${j}`}>{bp}</span>;
-    });
-  });
+    }
+    lastIndex = start + token.length;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(<span key={`t-${index++}`}>{text.slice(lastIndex)}</span>);
+  }
+  return nodes;
 }
 
 function extractCodeBlocks(content: string): Array<{ language: string; code: string }> {
@@ -603,6 +627,12 @@ const codeBlockStyle: CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
   lineHeight: 1.55,
   color: "#e7ecff",
+};
+
+const linkStyle: CSSProperties = {
+  color: "#8fb5ff",
+  textDecoration: "underline",
+  textUnderlineOffset: 3,
 };
 
 const inlineCodeStyle: CSSProperties = {
