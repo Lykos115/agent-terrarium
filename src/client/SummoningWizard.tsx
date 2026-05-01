@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import type { ReactNode } from "react";
 import { Application } from "pixi.js";
 import { PixiSpriteActor } from "../modules/sprite-engine";
 import { useTerrariumStore } from "./store";
@@ -9,7 +10,7 @@ import {
   defaultTierFor,
   defaultPersonalityFor,
 } from "./summoning-presets";
-import type { AgentConfig, Specialty, ModelTier } from "../types";
+import type { Agent, AgentConfig, Specialty, ModelTier } from "../types";
 
 /**
  * Summoning Wizard — 4-step modal for configuring and creating a new agent.
@@ -25,13 +26,24 @@ import type { AgentConfig, Specialty, ModelTier } from "../types";
  */
 export function SummoningWizard({
   onSummon,
+  onRestore,
 }: {
   onSummon: (config: AgentConfig) => void;
+  onRestore?: (agentId: string) => void;
 }) {
   const wizardOpen = useTerrariumStore((s) => s.ui.wizardOpen);
   const setWizardOpen = useTerrariumStore((s) => s.setWizardOpen);
   const agents = useTerrariumStore((s) => s.agentList);
+  const archivedAgentsMap = useTerrariumStore((s) => s.archivedAgents);
+  const archivedAgents = useMemo(
+    () =>
+      Array.from(archivedAgentsMap.values()).sort((a, b) =>
+        b.updatedAt.localeCompare(a.updatedAt),
+      ),
+    [archivedAgentsMap],
+  );
 
+  const [tab, setTab] = useState<"new" | "restore">("new");
   const [step, setStep] = useState(1);
   const [selectedSpecialty, setSelectedSpecialty] = useState<Specialty | null>(
     null,
@@ -47,6 +59,7 @@ export function SummoningWizard({
   // Reset wizard state when it opens
   useEffect(() => {
     if (wizardOpen) {
+      setTab("new");
       setStep(1);
       setSelectedSpecialty(null);
       setSelectedTier("Balanced");
@@ -103,6 +116,12 @@ export function SummoningWizard({
     if (step > 1) setStep(step - 1);
   };
 
+  const handleRestore = (agent: Agent) => {
+    if (!window.confirm(`Restore ${agent.name} to the terrarium?`)) return;
+    onRestore?.(agent.id);
+    setWizardOpen(false);
+  };
+
   const handleSummon = () => {
     if (!selectedSpecialty) return;
     const config: AgentConfig = {
@@ -156,101 +175,226 @@ export function SummoningWizard({
         >
           Summon Agent
         </h2>
-        <div style={{ fontSize: 13, color: "#888", marginBottom: 24 }}>
-          Step {step} of 4
+        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+          <TabButton active={tab === "new"} onClick={() => setTab("new")}>
+            New Agent
+          </TabButton>
+          <TabButton active={tab === "restore"} onClick={() => setTab("restore")}>
+            Restore {archivedAgents.length ? `(${archivedAgents.length})` : ""}
+          </TabButton>
         </div>
 
-        {/* Step content */}
-        {step === 1 && (
-          <Step1Specialty
-            selected={selectedSpecialty}
-            onSelect={setSelectedSpecialty}
-          />
-        )}
-        {step === 2 && (
-          <Step2Tier selected={selectedTier} onSelect={setSelectedTier} />
-        )}
-        {step === 3 && (
-          <Step3SpriteKit
-            selected={selectedSpriteId}
-            onSelect={setSelectedSpriteId}
-          />
-        )}
-        {step === 4 && (
-          <Step4Confirm
-            specialty={selectedSpecialty!}
-            tier={selectedTier}
-            spriteId={selectedSpriteId}
-            name={agentName}
-            onNameChange={setAgentName}
-          />
-        )}
+        {tab === "restore" ? (
+          <RestoreTab archivedAgents={archivedAgents} onRestore={handleRestore} />
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: "#888", marginBottom: 24 }}>
+              Step {step} of 4
+            </div>
 
-        {/* Footer navigation */}
-        <div
-          style={{
-            marginTop: 32,
-            display: "flex",
-            justifyContent: "space-between",
-          }}
-        >
-          <button
-            onClick={handleBack}
-            disabled={step === 1}
-            style={{
-              padding: "10px 20px",
-              background: step === 1 ? "#222" : "#3a3a6a",
-              color: step === 1 ? "#555" : "#e5e5f0",
-              border: "none",
-              borderRadius: 6,
-              cursor: step === 1 ? "not-allowed" : "pointer",
-              fontSize: 14,
-            }}
-          >
-            Back
-          </button>
+            {/* Step content */}
+            {step === 1 && (
+              <Step1Specialty
+                selected={selectedSpecialty}
+                onSelect={setSelectedSpecialty}
+              />
+            )}
+            {step === 2 && (
+              <Step2Tier selected={selectedTier} onSelect={setSelectedTier} />
+            )}
+            {step === 3 && (
+              <Step3SpriteKit
+                selected={selectedSpriteId}
+                onSelect={setSelectedSpriteId}
+              />
+            )}
+            {step === 4 && (
+              <Step4Confirm
+                specialty={selectedSpecialty!}
+                tier={selectedTier}
+                spriteId={selectedSpriteId}
+                name={agentName}
+                onNameChange={setAgentName}
+              />
+            )}
 
-          {step < 4 ? (
-            <button
-              onClick={handleNext}
-              disabled={step === 1 && !selectedSpecialty}
+            {/* Footer navigation */}
+            <div
               style={{
-                padding: "10px 20px",
-                background:
-                  step === 1 && !selectedSpecialty ? "#222" : "#6b9dff",
-                color:
-                  step === 1 && !selectedSpecialty ? "#555" : "#0f0f23",
-                border: "none",
-                borderRadius: 6,
-                cursor:
-                  step === 1 && !selectedSpecialty ? "not-allowed" : "pointer",
-                fontSize: 14,
-                fontWeight: 600,
+                marginTop: 32,
+                display: "flex",
+                justifyContent: "space-between",
               }}
             >
-              Next
-            </button>
-          ) : (
-            <button
-              onClick={handleSummon}
-              style={{
-                padding: "10px 20px",
-                background: "#6cf093",
-                color: "#0f0f23",
-                border: "none",
-                borderRadius: 6,
-                cursor: "pointer",
-                fontSize: 14,
-                fontWeight: 600,
-              }}
-            >
-              Summon
-            </button>
-          )}
-        </div>
+              <button
+                onClick={handleBack}
+                disabled={step === 1}
+                style={{
+                  padding: "10px 20px",
+                  background: step === 1 ? "#222" : "#3a3a6a",
+                  color: step === 1 ? "#555" : "#e5e5f0",
+                  border: "none",
+                  borderRadius: 6,
+                  cursor: step === 1 ? "not-allowed" : "pointer",
+                  fontSize: 14,
+                }}
+              >
+                Back
+              </button>
+
+              {step < 4 ? (
+                <button
+                  onClick={handleNext}
+                  disabled={step === 1 && !selectedSpecialty}
+                  style={{
+                    padding: "10px 20px",
+                    background:
+                      step === 1 && !selectedSpecialty ? "#222" : "#6b9dff",
+                    color:
+                      step === 1 && !selectedSpecialty ? "#555" : "#0f0f23",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor:
+                      step === 1 && !selectedSpecialty ? "not-allowed" : "pointer",
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  onClick={handleSummon}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#6cf093",
+                    color: "#0f0f23",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  Summon
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Restore tab
+// ---------------------------------------------------------------------------
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: "8px 12px",
+        borderRadius: 999,
+        border: active ? "1px solid #6b9dff" : "1px solid #3a3a6a",
+        background: active ? "#263456" : "#111126",
+        color: active ? "#d8e5ff" : "#9da0bd",
+        cursor: "pointer",
+        fontSize: 13,
+        fontWeight: 700,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function RestoreTab({
+  archivedAgents,
+  onRestore,
+}: {
+  archivedAgents: Agent[];
+  onRestore: (agent: Agent) => void;
+}) {
+  if (archivedAgents.length === 0) {
+    return (
+      <div
+        style={{
+          border: "1px dashed #3a3a6a",
+          borderRadius: 8,
+          padding: 24,
+          color: "#aaa",
+          textAlign: "center",
+        }}
+      >
+        No archived agents yet.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 style={{ margin: "0 0 16px 0", fontSize: 18, fontWeight: 500 }}>
+        Restore an archived agent
+      </h3>
+      <div style={{ display: "grid", gap: 12 }}>
+        {archivedAgents.map((agent) => (
+          <div
+            key={agent.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              padding: 14,
+              border: "1px solid #3a3a6a",
+              borderRadius: 8,
+              background: "#111126",
+            }}
+          >
+            <SpriteKitPreview spriteId={agent.spriteId || SPRITE_KITS[0].id} accentColor="#b38cff" />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontWeight: 700, color: "#e5e5f0" }}>{agent.name}</div>
+              <div style={{ marginTop: 3, fontSize: 13, color: "#aaa" }}>
+                {specialtyIcon(agent.specialty)} {agent.specialty} · dismissed {formatDate(agent.updatedAt)}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onRestore(agent)}
+              style={{
+                padding: "9px 12px",
+                border: "none",
+                borderRadius: 6,
+                background: "#6cf093",
+                color: "#0f0f23",
+                cursor: "pointer",
+                fontWeight: 700,
+              }}
+            >
+              Restore
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "recently";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 // ---------------------------------------------------------------------------
@@ -554,7 +698,7 @@ function SpriteKitPreview({
       hostRef.current.replaceChildren(app.canvas);
       actor = new PixiSpriteActor(app, spriteId, 18);
       actor.setState("idle");
-      actor.getContainer().position.set(30, 34);
+      actor.setPosition(30, 34);
       app.stage.addChild(actor.getContainer());
     }
 

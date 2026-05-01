@@ -88,6 +88,20 @@ describe("store: applyServerMessage", () => {
     expect(s.agentListLoaded).toBe(true);
   });
 
+  it("agent_list stores archived agents for restore flows", () => {
+    apply({
+      type: "agent_list",
+      data: {
+        agents: [agent("1")],
+        archivedAgents: [agent("2", { archived: true })],
+      },
+    });
+    const s = useTerrariumStore.getState();
+    expect(s.agents.has("1")).toBe(true);
+    expect(s.archivedAgents.has("2")).toBe(true);
+    expect(s.agentListLoaded).toBe(true);
+  });
+
   it("agent_added inserts a new agent", () => {
     apply({ type: "agent_list", data: { agents: [agent("1")] } });
     apply({ type: "agent_added", data: { agent: agent("2") } });

@@ -1,33 +1,30 @@
 import { useEffect, useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Application } from "pixi.js";
-import { PixiRoom, PixiSpriteActor } from "../modules/sprite-engine";
+import { PixiSpriteActor } from "../modules/sprite-engine";
 import type { Agent } from "../types";
 import { useTerrariumStore } from "./store";
 import {
-  ROOM_LOOKS,
   type RoomCustomization,
-  type RoomLook,
   useRoomCustomization,
 } from "./room-customization";
 import { ChatPanel } from "./ChatPanel";
+import { themeForAgent } from "./office-theme";
 
 export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObject<WebSocket | null> }) {
   const setRoute = useTerrariumStore((s) => s.setRoute);
   const [room, setRoom] = useRoomCustomization(agent.id);
   const streaming = useTerrariumStore((s) => s.streamingMessages.get(agent.id));
   const isChatLoading = useTerrariumStore((s) => s.chatLoading.has(agent.id));
-  const look = ROOM_LOOKS[room.look];
+  const theme = themeForAgent(agent);
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
-  const roomRef = useRef<PixiRoom | null>(null);
   const actorRef = useRef<PixiSpriteActor | null>(null);
 
   useEffect(() => {
     if (!canvasRef.current) return;
 
     let app: Application;
-    let pixiRoom: PixiRoom;
     let actor: PixiSpriteActor;
 
     (async () => {
@@ -45,22 +42,16 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
       canvasRef.current.appendChild(app.canvas);
       appRef.current = app;
 
-      pixiRoom = new PixiRoom(app);
-      pixiRoom.setBackground(0x000000);
-      pixiRoom.getContainer().alpha = 0;
-      roomRef.current = pixiRoom;
-
       actor = new PixiSpriteActor(app, agent.spriteId, 42);
       actorRef.current = actor;
-      pixiRoom.addActor(actor, 260, 245);
+      actor.setPosition(260, 245);
+      app.stage.addChild(actor.getContainer());
       actor.setState(agent.state);
     })();
 
     return () => {
       actorRef.current?.destroy();
       actorRef.current = null;
-      roomRef.current?.destroy();
-      roomRef.current = null;
       appRef.current?.destroy(true, { children: true });
       appRef.current = null;
     };
@@ -112,13 +103,12 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
               borderRadius: 24,
               overflow: "hidden",
               background: "#111123",
-              boxShadow: `0 24px 80px ${look.glow}`,
+              boxShadow: `0 24px 80px ${theme.accent}33`,
               position: "relative",
             }}
           >
-            <RoomScene agent={agent} roomImage={room.imageDataUrl} look={room.look}>
-              <div ref={canvasRef} style={{ position: "absolute", inset: 0, zIndex: 5 }} />
-              <DeskTerminal active={Boolean(isChatLoading || streaming)} accent={look.accent} />
+            <RoomScene agent={agent} roomImage={room.imageDataUrl}>
+              <div ref={canvasRef} style={{ position: "absolute", inset: 0, zIndex: 5, pointerEvents: "none" }} />
               {bubbleText && <SpeechBubble text={bubbleText} />}
             </RoomScene>
           </section>
@@ -167,32 +157,6 @@ function RoomSettingsCard({
         <span style={{ color: "#7f83a5", fontSize: 11 }}>Room controls</span>
       </div>
 
-      <label style={labelStyle}>Room look</label>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
-        {(Object.keys(ROOM_LOOKS) as RoomLook[]).map((key) => (
-          <button
-            key={key}
-            onClick={() => setRoom({ ...room, look: key })}
-            style={{
-              ...choiceButtonStyle,
-              borderColor: room.look === key ? ROOM_LOOKS[key].accent : "#36385f",
-              color: room.look === key ? "#fff" : "#b9bad2",
-            }}
-          >
-            <span
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: 5,
-                background: ROOM_LOOKS[key].wallpaper,
-                border: `1px solid ${ROOM_LOOKS[key].accent}`,
-              }}
-            />
-            {ROOM_LOOKS[key].label}
-          </button>
-        ))}
-      </div>
-
       <label style={labelStyle}>Backdrop image</label>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <input
@@ -211,29 +175,6 @@ function RoomSettingsCard({
         )}
       </div>
     </aside>
-  );
-}
-
-function DeskTerminal({ active, accent }: { active: boolean; accent: string }) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        right: "16%",
-        bottom: "30%",
-        zIndex: 7,
-        width: 96,
-        height: 58,
-        borderRadius: 10,
-        border: `2px solid ${accent}`,
-        background: "linear-gradient(180deg, #07121d, #040713)",
-        boxShadow: active ? `0 0 28px ${accent}` : `0 0 12px ${accent}66`,
-        opacity: 0.92,
-      }}
-    >
-      <div style={{ margin: "10px auto 0", width: "72%", height: 4, background: accent, opacity: 0.85 }} />
-      <div style={{ margin: "8px auto 0", width: "46%", height: 4, background: accent, opacity: active ? 1 : 0.45 }} />
-    </div>
   );
 }
 
@@ -274,67 +215,53 @@ function summarizeForBubble(content: string): string {
 export function RoomScene({
   agent,
   roomImage,
-  look: lookKey,
   children,
 }: {
   agent: Agent;
   roomImage?: string;
-  look: RoomLook;
   children?: ReactNode;
 }) {
-  const look = ROOM_LOOKS[lookKey];
+  const theme = themeForAgent(agent);
   return (
-    <div style={{ position: "relative", height: 420, overflow: "hidden" }}>
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: roomImage
-            ? `linear-gradient(rgba(8,8,20,0.12), rgba(8,8,20,0.34)), url(${roomImage}) center / cover`
-            : look.wallpaper,
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          left: "8%",
-          right: "8%",
-          top: "12%",
-          height: "48%",
-          border: `2px solid ${look.accent}`,
-          borderRadius: 18,
-          opacity: 0.35,
-          boxShadow: `0 0 40px ${look.glow}`,
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          left: "-8%",
-          right: "-8%",
-          bottom: "-18%",
-          height: "45%",
-          background: look.floor,
-          transform: "perspective(480px) rotateX(58deg)",
-          transformOrigin: "top center",
-          borderTop: `3px solid ${look.accent}`,
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          left: 24,
-          top: 20,
-          padding: "7px 11px",
-          borderRadius: 999,
-          background: "rgba(0,0,0,0.38)",
-          color: "#f5f5ff",
-          fontSize: 12,
-          letterSpacing: 0.4,
-          zIndex: 8,
-        }}
-      >
-        {agent.name}'s room
+    <div
+      className="pixel-room"
+      style={
+        {
+          position: "relative",
+          height: 420,
+          overflow: "hidden",
+          backgroundColor: theme.wall,
+          "--accent": theme.accent,
+          "--bed": theme.bed,
+        } as CSSProperties
+      }
+    >
+      {roomImage && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: `linear-gradient(rgba(8,8,20,0.12), rgba(8,8,20,0.34)), url(${roomImage}) center / cover`,
+          }}
+        />
+      )}
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.08)" }} />
+      <div className="absolute inset-x-0 bottom-0 h-[40%]" style={{ background: theme.floor }} />
+      <div className="pixel-bed" />
+      <div className="pixel-desk" />
+      <div className="pixel-monitor" />
+      <div className="pixel-shelf" />
+      <div className="absolute right-[10%] top-[14%] h-[18%] w-[20%] border border-white/10 bg-black/25 p-1">
+        <div className="mb-1 h-1 bg-[var(--accent)] opacity-75" />
+        <div className="mb-1 h-1 w-2/3 bg-[var(--accent)] opacity-50" />
+        <div className="font-mono text-[7px] uppercase leading-none text-white/45">{theme.prop}</div>
+      </div>
+      <div className="pixel-door bottom-0 left-1/2 -translate-x-1/2" />
+      <div className="absolute left-2 top-2 z-10 rounded bg-black/45 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-slate-100">
+        {agent.name}
+      </div>
+      <div className="absolute right-2 top-2 z-10 rounded border border-white/10 bg-black/35 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider" style={{ color: theme.accent }}>
+        {agent.state}
       </div>
       {children}
     </div>
@@ -347,18 +274,6 @@ const labelStyle: CSSProperties = {
   color: "#f0f0ff",
   fontSize: 13,
   fontWeight: 700,
-};
-
-const choiceButtonStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  padding: "10px 12px",
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid #36385f",
-  borderRadius: 10,
-  cursor: "pointer",
-  textAlign: "left",
 };
 
 const ghostButtonStyle: CSSProperties = {

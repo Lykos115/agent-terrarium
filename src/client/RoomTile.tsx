@@ -142,7 +142,7 @@ function PixiAgentCanvas({ agent, size = 64 }: { agent: Agent; size?: number }) 
       hostRef.current.replaceChildren(app.canvas);
       actor = new PixiSpriteActor(app, agent.spriteId, Math.max(18, size / 3));
       actor.setState(agent.state as SpriteState);
-      actor.getContainer().position.set(size / 2, size / 2 + size * 0.08);
+      actor.setPosition(size / 2, size / 2 + size * 0.08);
       app.stage.addChild(actor.getContainer());
       actorRef.current = actor;
     }

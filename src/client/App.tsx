@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTerrarium } from "./useTerrarium";
-import { pathToRoute, useTerrariumStore, requestCreateAgent } from "./store";
+import { pathToRoute, useTerrariumStore, requestCreateAgent, requestRestoreAgent } from "./store";
 import EmptyTerrarium from "./EmptyTerrarium";
 import { DollhouseGrid } from "./DollhouseGrid";
 import { SummoningWizard } from "./SummoningWizard";
@@ -99,6 +99,9 @@ export default function App() {
       <SummoningWizard
         onSummon={(config) => {
           if (ws.current) requestCreateAgent(ws.current, config);
+        }}
+        onRestore={(agentId) => {
+          if (ws.current) requestRestoreAgent(ws.current, agentId);
         }}
       />
 

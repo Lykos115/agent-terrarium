@@ -113,6 +113,9 @@ export interface SpriteActor {
   /** Switch to a state animation (idle/thinking/working/sleeping) */
   setState(state: SpriteState): void;
 
+  /** Set sprite position immediately */
+  setPosition(x: number, y: number): void;
+
   /** Tween sprite to a target position over duration ms */
   walkTo(x: number, y: number, durationMs?: number): void;
 
@@ -165,6 +168,12 @@ export class PixiSpriteActor implements SpriteActor {
     }
     this.state = state;
     this.redraw();
+  }
+
+  setPosition(x: number, y: number): void {
+    this.baseX = x;
+    this.baseY = y;
+    this.container.position.set(x, y);
   }
 
   walkTo(x: number, y: number, durationMs: number = 500): void {
@@ -423,7 +432,7 @@ export class PixiRoom implements Room {
     if (actor instanceof PixiSpriteActor) {
       this.actors.add(actor);
       const actorContainer = actor.getContainer();
-      actorContainer.position.set(x, y);
+      actor.setPosition(x, y);
       this.container.addChild(actorContainer);
     }
   }
@@ -464,6 +473,7 @@ export class PixiRoom implements Room {
 /** @deprecated Use PixiSpriteActor instead. */
 export class StubSpriteActor implements SpriteActor {
   setState(_state: SpriteState): void {}
+  setPosition(_x: number, _y: number): void {}
   walkTo(_x: number, _y: number, _durationMs?: number): void {}
   playBubble(_text: string, _durationMs?: number): void {}
   setVisible(_visible: boolean): void {}
