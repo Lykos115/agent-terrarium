@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Application } from "pixi.js";
 import { PixiSpriteActor } from "../modules/sprite-engine";
@@ -17,7 +17,6 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
   const streaming = useTerrariumStore((s) => s.streamingMessages.get(agent.id));
   const isChatLoading = useTerrariumStore((s) => s.chatLoading.has(agent.id));
   const theme = themeForAgent(agent);
-  const [chatOpen, setChatOpen] = useState(false);
   const visualState = useMemo(() => {
     if (streaming) return "working";
     if (isChatLoading) return "thinking";
@@ -96,10 +95,8 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: chatOpen
-            ? "minmax(460px, 0.95fr) minmax(560px, 1.25fr)"
-            : "minmax(520px, 1fr) minmax(280px, 360px)",
-          gap: chatOpen ? 24 : 20,
+          gridTemplateColumns: "minmax(460px, 0.95fr) minmax(560px, 1.25fr)",
+          gap: 24,
           alignItems: "start",
           marginTop: 18,
         }}
@@ -129,42 +126,9 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
           />
         </div>
 
-        {chatOpen ? (
-          <div style={chatPanelWrapStyle}>
-            <button
-              onClick={() => setChatOpen(false)}
-              style={closeChatButtonStyle}
-              aria-label="Close chat panel"
-            >
-              Close chat
-            </button>
-            <ChatPanel agent={agent} ws={ws} />
-          </div>
-        ) : (
-          <TalkCard agent={agent} onOpen={() => setChatOpen(true)} />
-        )}
+        <ChatPanel agent={agent} ws={ws} />
       </div>
     </div>
-  );
-}
-
-function TalkCard({ agent, onOpen }: { agent: Agent; onOpen: () => void }) {
-  const theme = themeForAgent(agent);
-  return (
-    <aside style={talkCardStyle}>
-      <div style={{ fontSize: 38, marginBottom: 12 }}>💬</div>
-      <h2 style={{ margin: "0 0 8px", fontSize: 24 }}>Talk with {agent.name}</h2>
-      <p style={{ margin: "0 0 20px", color: "#aeb0ce", lineHeight: 1.6 }}>
-        Open a right-side chat panel for streamed replies, markdown, code blocks, and session history.
-      </p>
-      <button
-        onClick={onOpen}
-        style={{ ...talkButtonStyle, background: theme.accent }}
-        aria-label={`Talk with ${agent.name}`}
-      >
-        Talk
-      </button>
-    </aside>
   );
 }
 
@@ -308,51 +272,6 @@ export function RoomScene({
     </div>
   );
 }
-
-const talkCardStyle: CSSProperties = {
-  minHeight: 320,
-  border: "1px solid #2f3159",
-  borderRadius: 24,
-  padding: 24,
-  background: "linear-gradient(180deg, rgba(12, 15, 36, 0.88), rgba(7, 9, 22, 0.88))",
-  boxShadow: "0 18px 60px rgba(0,0,0,0.28)",
-  alignSelf: "start",
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "center",
-};
-
-const talkButtonStyle: CSSProperties = {
-  width: "100%",
-  maxWidth: 220,
-  padding: "14px 18px",
-  border: "none",
-  borderRadius: 16,
-  color: "#050812",
-  fontSize: 16,
-  fontWeight: 900,
-  cursor: "pointer",
-  boxShadow: "0 12px 34px rgba(0,0,0,0.32)",
-};
-
-const chatPanelWrapStyle: CSSProperties = {
-  position: "relative",
-  animation: "chat-panel-in 180ms ease-out",
-};
-
-const closeChatButtonStyle: CSSProperties = {
-  position: "absolute",
-  right: 14,
-  top: 14,
-  zIndex: 3,
-  padding: "7px 10px",
-  border: "1px solid #39406a",
-  borderRadius: 10,
-  background: "rgba(255,255,255,0.05)",
-  color: "#cbd0f0",
-  cursor: "pointer",
-  fontSize: 12,
-};
 
 const labelStyle: CSSProperties = {
   display: "block",
