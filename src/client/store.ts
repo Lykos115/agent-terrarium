@@ -38,6 +38,14 @@ export interface TerrariumState {
   // Errors surfaced to the UI as toasts
   lastError: string | null;
 
+  // UI state
+  /**
+   * Summoning wizard modal visibility. Owned by #9 (the wizard) and opened
+   * by #5 (empty-terrarium portal click) and later by the grid's "+ add"
+   * button. Kept in the root store so any view can toggle it.
+   */
+  ui: { wizardOpen: boolean };
+
   // -------------------------------------------------------------------------
   // Actions — pure state mutations invoked by useTerrarium / components
   // -------------------------------------------------------------------------
@@ -45,6 +53,7 @@ export interface TerrariumState {
   applyServerMessage: (message: ServerMessage) => void;
   setRoute: (route: Route) => void;
   clearError: () => void;
+  setWizardOpen: (open: boolean) => void;
 
   // Selectors exposed as methods for convenience
   agentList: () => Agent[];
@@ -61,12 +70,15 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
   agentListLoaded: false,
   route: { name: "grid" },
   lastError: null,
+  ui: { wizardOpen: false },
 
   setConnection: (status) => set({ connection: status }),
 
   setRoute: (route) => set({ route }),
 
   clearError: () => set({ lastError: null }),
+
+  setWizardOpen: (open) => set({ ui: { wizardOpen: open } }),
 
   agentList: () => {
     const m = get().agents;

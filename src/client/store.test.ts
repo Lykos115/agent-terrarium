@@ -31,12 +31,26 @@ beforeEach(() => {
     agentListLoaded: false,
     route: { name: "grid" },
     lastError: null,
+    ui: { wizardOpen: false },
   });
 });
 
 // ---------------------------------------------------------------------------
 // Connection
 // ---------------------------------------------------------------------------
+
+describe("store: ui.wizardOpen", () => {
+  it("starts closed", () => {
+    expect(useTerrariumStore.getState().ui.wizardOpen).toBe(false);
+  });
+
+  it("setWizardOpen toggles the flag", () => {
+    useTerrariumStore.getState().setWizardOpen(true);
+    expect(useTerrariumStore.getState().ui.wizardOpen).toBe(true);
+    useTerrariumStore.getState().setWizardOpen(false);
+    expect(useTerrariumStore.getState().ui.wizardOpen).toBe(false);
+  });
+});
 
 describe("store: connection", () => {
   it("starts as connecting", () => {
