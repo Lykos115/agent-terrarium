@@ -27,6 +27,7 @@ beforeEach(() => {
   useTerrariumStore.setState({
     connection: "connecting",
     agents: new Map(),
+    agentList: [],
     archivedAgents: new Map(),
     agentListLoaded: false,
     route: { name: "grid" },
@@ -154,10 +155,15 @@ describe("store: applyServerMessage", () => {
 // agentList selector
 // ---------------------------------------------------------------------------
 
-describe("store: agentList selector", () => {
-  it("returns agents sorted by createdAt ascending", () => {
-    const apply = useTerrariumStore.getState().applyServerMessage;
-    apply({
+describe("store: agentList derived field", () => {
+  const apply = () => useTerrariumStore.getState().applyServerMessage;
+
+  it("starts empty", () => {
+    expect(useTerrariumStore.getState().agentList).toEqual([]);
+  });
+
+  it("is kept sorted by createdAt ascending", () => {
+    apply()({
       type: "agent_list",
       data: {
         agents: [
@@ -167,12 +173,54 @@ describe("store: agentList selector", () => {
         ],
       },
     });
-    const list = useTerrariumStore.getState().agentList();
-    expect(list.map((a) => a.id)).toEqual(["1", "2", "3"]);
+    expect(useTerrariumStore.getState().agentList.map((a) => a.id)).toEqual([
+      "1",
+      "2",
+      "3",
+    ]);
   });
 
-  it("returns empty array when no agents present", () => {
-    expect(useTerrariumStore.getState().agentList()).toEqual([]);
+  it("stays in sync when an agent is added", () => {
+    apply()({ type: "agent_list", data: { agents: [agent("1")] } });
+    apply()({ type: "agent_added", data: { agent: agent("2") } });
+    expect(useTerrariumStore.getState().agentList.map((a) => a.id)).toEqual([
+      "1",
+      "2",
+    ]);
+  });
+
+  it("stays in sync when an agent is archived", () => {
+    apply()({
+      type: "agent_list",
+      data: { agents: [agent("1"), agent("2")] },
+    });
+    apply()({ type: "agent_archived", data: { agentId: "1" } });
+    expect(useTerrariumStore.getState().agentList.map((a) => a.id)).toEqual([
+      "2",
+    ]);
+  });
+
+  it("reference is stable across store updates that don't touch agents", () => {
+    apply()({ type: "agent_list", data: { agents: [agent("1")] } });
+    const before = useTerrariumStore.getState().agentList;
+    useTerrariumStore.getState().setRoute({ name: "room", agentId: "1" });
+    useTerrariumStore.getState().setWizardOpen(true);
+    useTerrariumStore.getState().setConnection("open");
+    const after = useTerrariumStore.getState().agentList;
+    // This is the footgun guard: if this equality fails, something in the
+    // reducer is rebuilding the list on unrelated updates and subscribers
+    // will re-render every time. (See "infinite re-render loop" fix in
+    // commit 0dd9965 for the incident this invariant prevents.)
+    expect(after).toBe(before);
+  });
+
+  it("reference changes only when the agent set changes", () => {
+    apply()({ type: "agent_list", data: { agents: [agent("1")] } });
+    const before = useTerrariumStore.getState().agentList;
+    apply()({ type: "agent_added", data: { agent: agent("2") } });
+    const after = useTerrariumStore.getState().agentList;
+    expect(after).not.toBe(before);
+    expect(after.map((a) => a.id)).toEqual(["1", "2"]);
   });
 });
 

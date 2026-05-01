@@ -27,6 +27,21 @@ export interface TerrariumState {
   // Agents
   /** Non-archived agents currently in the terrarium, keyed by id. */
   agents: Map<string, Agent>;
+  /**
+   * Precomputed sorted array of `agents.values()` (ascending by `createdAt`).
+   *
+   * Kept in state on purpose: React components that want the list use
+   * `useTerrariumStore((s) => s.agentList)` and get a stable reference that
+   * only changes when the agent set actually changes. Do NOT replace this
+   * with a method-style selector (e.g. `agentList: () => Agent[]`): calling
+   * it inside a Zustand selector returns a fresh array on every snapshot
+   * check, which trips React's "The result of getSnapshot should be
+   * cached" guard and sends the component into an infinite re-render loop.
+   *
+   * Updated by the internal `withAgents` helper, which every reducer path
+   * that mutates `agents` routes through.
+   */
+  agentList: Agent[];
   /** Archived agents (needed by the summoning wizard's Restore section, #11). */
   archivedAgents: Map<string, Agent>;
   /** True until the first `agent_list` message has been applied. */
@@ -54,9 +69,33 @@ export interface TerrariumState {
   setRoute: (route: Route) => void;
   clearError: () => void;
   setWizardOpen: (open: boolean) => void;
+}
 
-  // Selectors exposed as methods for convenience
-  agentList: () => Agent[];
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the sorted agent array from the agents Map. Centralising this here
+ * means every reducer path produces an identical ordering, and guarantees
+ * `agentList` is always in sync with `agents`.
+ */
+function buildAgentList(agents: Map<string, Agent>): Agent[] {
+  return Array.from(agents.values()).sort((a, b) =>
+    a.createdAt.localeCompare(b.createdAt),
+  );
+}
+
+/**
+ * Return a partial state update that replaces the agents Map and the
+ * derived `agentList` array together. Every reducer that writes to
+ * `agents` should go through this to keep the two in sync.
+ */
+function withAgents(agents: Map<string, Agent>): {
+  agents: Map<string, Agent>;
+  agentList: Agent[];
+} {
+  return { agents, agentList: buildAgentList(agents) };
 }
 
 /**
@@ -66,6 +105,7 @@ export interface TerrariumState {
 export const useTerrariumStore = create<TerrariumState>((set, get) => ({
   connection: "connecting",
   agents: new Map(),
+  agentList: [],
   archivedAgents: new Map(),
   agentListLoaded: false,
   route: { name: "grid" },
@@ -80,14 +120,6 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
 
   setWizardOpen: (open) => set({ ui: { wizardOpen: open } }),
 
-  agentList: () => {
-    const m = get().agents;
-    // Sort by createdAt ascending for stable grid ordering
-    return Array.from(m.values()).sort((a, b) =>
-      a.createdAt.localeCompare(b.createdAt),
-    );
-  },
-
   applyServerMessage: (message) => {
     switch (message.type) {
       case "connected":
@@ -100,14 +132,14 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
       case "agent_list": {
         const agents = new Map<string, Agent>();
         for (const a of message.data.agents) agents.set(a.id, a);
-        set({ agents, agentListLoaded: true });
+        set({ ...withAgents(agents), agentListLoaded: true });
         return;
       }
 
       case "agent_added": {
         const agents = new Map(get().agents);
         agents.set(message.data.agent.id, message.data.agent);
-        set({ agents });
+        set(withAgents(agents));
         return;
       }
 
@@ -121,7 +153,7 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
         if (removed) {
           archivedAgents.set(id, { ...removed, archived: true });
         }
-        set({ agents, archivedAgents });
+        set({ ...withAgents(agents), archivedAgents });
         // If we were viewing the archived agent's room, bounce to the grid
         const route = get().route;
         if (
@@ -139,7 +171,7 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
         agents.set(agent.id, agent);
         const archivedAgents = new Map(get().archivedAgents);
         archivedAgents.delete(agent.id);
-        set({ agents, archivedAgents });
+        set({ ...withAgents(agents), archivedAgents });
         return;
       }
 
@@ -151,11 +183,11 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
           agents.delete(agent.id);
           const archivedAgents = new Map(get().archivedAgents);
           archivedAgents.set(agent.id, agent);
-          set({ agents, archivedAgents });
+          set({ ...withAgents(agents), archivedAgents });
         } else {
           const agents = new Map(get().agents);
           agents.set(agent.id, agent);
-          set({ agents });
+          set(withAgents(agents));
         }
         return;
       }

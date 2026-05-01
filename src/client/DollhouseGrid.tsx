@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { RoomTile } from "./RoomTile";
 import { useTerrariumStore } from "./store";
 
@@ -8,17 +7,7 @@ import { useTerrariumStore } from "./store";
  * Includes a "+ Summon" button to open the wizard.
  */
 export function DollhouseGrid() {
-  // Select the stable Map reference — NEVER call s.agentList() inside a
-  // Zustand selector, it returns a fresh array each snapshot and triggers
-  // an infinite re-render loop ("The result of getSnapshot should be cached").
-  const agentsMap = useTerrariumStore((s) => s.agents);
-  const agents = useMemo(
-    () =>
-      Array.from(agentsMap.values()).sort((a, b) =>
-        a.createdAt.localeCompare(b.createdAt),
-      ),
-    [agentsMap],
-  );
+  const agents = useTerrariumStore((s) => s.agentList);
   const setWizardOpen = useTerrariumStore((s) => s.setWizardOpen);
 
   return (
