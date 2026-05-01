@@ -1,5 +1,8 @@
 import { useTerrarium } from "./useTerrarium";
-import { useTerrariumStore } from "./store";
+import { useTerrariumStore, requestCreateAgent } from "./store";
+import EmptyTerrarium from "./EmptyTerrarium";
+import { DollhouseGrid } from "./DollhouseGrid";
+import { SummoningWizard } from "./SummoningWizard";
 
 /**
  * App shell.
@@ -17,7 +20,7 @@ import { useTerrariumStore } from "./store";
  * real component" is just a single import swap.
  */
 export default function App() {
-  useTerrarium(); // establishes the single WS connection
+  const { ws } = useTerrarium(); // establishes the single WS connection
 
   const agentListLoaded = useTerrariumStore((s) => s.agentListLoaded);
   const agents = useTerrariumStore((s) => s.agents);
@@ -42,15 +45,26 @@ export default function App() {
         {!agentListLoaded ? (
           <LoadingView />
         ) : agents.size === 0 ? (
-          <EmptyTerrariumPlaceholder />
+          <EmptyTerrarium />
         ) : route.name === "grid" ? (
-          <DollhouseGridPlaceholder />
+          <DollhouseGrid />
         ) : route.name === "room" ? (
           <AgentRoomPlaceholder agentId={route.agentId} />
         ) : (
           <AgentEditorPlaceholder agentId={route.agentId} />
         )}
       </main>
+
+      {/*
+        Wizard is rendered unconditionally; it reads ui.wizardOpen internally
+        and returns null when closed. Opened from either the empty-state
+        portal (#5) or the grid's "+ Summon" button (#6).
+      */}
+      <SummoningWizard
+        onSummon={(config) => {
+          if (ws.current) requestCreateAgent(ws.current, config);
+        }}
+      />
 
       {lastError && <ErrorToast message={lastError} onDismiss={clearError} />}
     </div>
@@ -152,69 +166,6 @@ function LoadingView() {
       }}
     >
       Loading…
-    </div>
-  );
-}
-
-/** Replaced by #5: Empty Terrarium First-Run Experience. */
-function EmptyTerrariumPlaceholder() {
-  return (
-    <div
-      style={{
-        flex: 1,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-        gap: 16,
-        color: "#666",
-      }}
-    >
-      <div style={{ fontSize: 48 }}>◉</div>
-      <div>The terrarium awaits.</div>
-      <div style={{ fontSize: 12, opacity: 0.5 }}>
-        (Empty-state portal — issue #5)
-      </div>
-    </div>
-  );
-}
-
-/** Replaced by #6: Dollhouse Grid with Agent Sprites. */
-function DollhouseGridPlaceholder() {
-  const agents = useTerrariumStore((s) => s.agentList());
-  return (
-    <div style={{ padding: 24 }}>
-      <div style={{ marginBottom: 16, fontSize: 14, opacity: 0.6 }}>
-        (Dollhouse grid placeholder — issue #6)
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-          gap: 16,
-        }}
-      >
-        {agents.map((a) => (
-          <div
-            key={a.id}
-            style={{
-              border: "1px solid #3a3a6a",
-              borderRadius: 6,
-              padding: 16,
-              background: "#1a1a2e",
-              minHeight: 140,
-            }}
-          >
-            <div style={{ fontWeight: 600 }}>{a.name}</div>
-            <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>
-              {a.specialty}
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.4, marginTop: 8 }}>
-              {a.state} · {a.modelTier}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
