@@ -255,16 +255,9 @@ export class PixiSpriteActor implements SpriteActor {
     // Update container position
     this.container.position.set(this.baseX, this.baseY + bobY);
 
-    // Redraw blob with shifted color
+    // Redraw pixel mascot with shifted color
     this.blob.clear();
-    this.blob.circle(0, 0, this.radius);
-
-    if (this.state === "sleeping") {
-      // Dimmed alpha
-      this.blob.fill({ color: shiftedColor, alpha: 0.5 });
-    } else {
-      this.blob.fill({ color: shiftedColor });
-    }
+    this.drawPixelMascot(shiftedColor, this.state === "sleeping" ? 0.5 : 1);
 
     // State-specific overlays
     this.updateOverlay(elapsed);
@@ -301,6 +294,29 @@ export class PixiSpriteActor implements SpriteActor {
       // "Z" bubble text (already handled by playBubble in setState redraw)
       // We'll auto-trigger it once when entering sleeping
     }
+  }
+
+  private drawPixelMascot(color: number, alpha: number): void {
+    const unit = this.radius / 4;
+    const pixels: Array<[number, number]> = [
+      [-1, -3], [0, -3],
+      [-2, -2], [-1, -2], [0, -2], [1, -2],
+      [-2, -1], [-1, -1], [0, -1], [1, -1],
+      [-1, 0], [0, 0],
+      [-3, 1], [-1, 1], [0, 1], [2, 1],
+      [-3, 2], [-1, 2], [0, 2], [2, 2],
+      [-2, 3], [1, 3],
+    ];
+
+    for (const [x, y] of pixels) {
+      this.blob.rect(x * unit, y * unit, unit, unit);
+      this.blob.fill({ color, alpha });
+    }
+
+    // eyes
+    this.blob.rect(-1.35 * unit, -1.4 * unit, unit * 0.55, unit * 0.55);
+    this.blob.rect(0.8 * unit, -1.4 * unit, unit * 0.55, unit * 0.55);
+    this.blob.fill({ color: 0xffffff, alpha });
   }
 
   private redraw(): void {
@@ -408,6 +424,11 @@ export class PixiRoom implements Room {
     // Fill entire app screen
     this.background.rect(0, 0, this.app.screen.width, this.app.screen.height);
     this.background.fill(color);
+  }
+
+  /** Get the PixiJS container for visual composition/custom styling. */
+  getContainer(): Container {
+    return this.container;
   }
 
   destroy(): void {

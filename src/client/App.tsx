@@ -3,6 +3,7 @@ import { useTerrariumStore, requestCreateAgent } from "./store";
 import EmptyTerrarium from "./EmptyTerrarium";
 import { DollhouseGrid } from "./DollhouseGrid";
 import { SummoningWizard } from "./SummoningWizard";
+import { AgentRoom } from "./AgentRoom";
 
 /**
  * App shell.
@@ -39,7 +40,9 @@ export default function App() {
         flexDirection: "column",
       }}
     >
-      <Header connection={connection} />
+      {!(agentListLoaded && agents.size > 0 && route.name === "grid") && (
+        <Header connection={connection} />
+      )}
 
       <main style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {!agentListLoaded ? (
@@ -49,7 +52,7 @@ export default function App() {
         ) : route.name === "grid" ? (
           <DollhouseGrid />
         ) : route.name === "room" ? (
-          <AgentRoomPlaceholder agentId={route.agentId} />
+          <AgentRoomView agentId={route.agentId} />
         ) : (
           <AgentEditorPlaceholder agentId={route.agentId} />
         )}
@@ -170,13 +173,12 @@ function LoadingView() {
   );
 }
 
-/** Replaced by #10: Agent Room Zoom & Curtain Transition. */
-function AgentRoomPlaceholder({ agentId }: { agentId: string }) {
-  return (
-    <div style={{ padding: 24 }}>
-      Agent room for <code>{agentId}</code> (placeholder — issue #10)
-    </div>
-  );
+function AgentRoomView({ agentId }: { agentId: string }) {
+  const agent = useTerrariumStore((s) => s.agents.get(agentId));
+  if (!agent) {
+    return <div style={{ padding: 24 }}>Agent not found.</div>;
+  }
+  return <AgentRoom agent={agent} />;
 }
 
 function AgentEditorPlaceholder({ agentId }: { agentId: string }) {

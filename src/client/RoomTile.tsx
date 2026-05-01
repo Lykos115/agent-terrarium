@@ -1,148 +1,163 @@
-import { useEffect, useRef } from "react";
-import { Application } from "pixi.js";
+import type { CSSProperties } from "react";
 import type { Agent } from "../types";
-import { PixiSpriteActor, PixiRoom } from "../modules/sprite-engine";
-import { useTerrariumStore } from "./store";
+import type { AgentVisualPhase } from "./useAgentOfficeLocations";
+import { agentColor, themeForAgent } from "./office-theme";
+
+export type RoomTileVariant = "home" | "commons" | "empty";
 
 interface RoomTileProps {
-  agent: Agent;
+  agent?: Agent;
+  variant?: RoomTileVariant;
+  selected?: boolean;
+  occupant?: Agent | null;
+  occupants?: Agent[];
+  slotLabel?: string;
+  phase?: AgentVisualPhase;
+  onSelect?: () => void;
 }
 
-/**
- * A single room tile: mounts a PixiJS canvas, creates a Room + SpriteActor
- * for the given agent, and displays the agent name/specialty overlay.
- * Clicking navigates to the agent's full room view.
- */
-export function RoomTile({ agent }: RoomTileProps) {
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const appRef = useRef<Application | null>(null);
-  const roomRef = useRef<PixiRoom | null>(null);
-  const actorRef = useRef<PixiSpriteActor | null>(null);
+export function RoomTile({
+  agent,
+  occupant,
+  occupants,
+  variant = agent ? "home" : "empty",
+  selected = false,
+  slotLabel,
+  phase = "home",
+  onSelect,
+}: RoomTileProps) {
+  if (variant === "commons") {
+    return <CommandCommons occupants={occupants ?? (occupant ? [occupant] : [])} selected={selected} onSelect={onSelect} />;
+  }
 
-  const setRoute = useTerrariumStore((s) => s.setRoute);
+  if (!agent) {
+    return <EmptyRoom slotLabel={slotLabel} selected={selected} onSelect={onSelect} />;
+  }
 
-  // Initialize PixiJS on mount
-  useEffect(() => {
-    if (!canvasRef.current) return;
-
-    let app: Application;
-    let room: PixiRoom;
-    let actor: PixiSpriteActor;
-
-    (async () => {
-      // Create PixiJS app
-      app = new Application();
-      await app.init({
-        width: 260,
-        height: 180,
-        backgroundColor: 0x1a1a2e,
-        antialias: true,
-        autoDensity: true,
-        resolution: window.devicePixelRatio || 1,
-      });
-
-      if (!canvasRef.current) return; // unmounted during init
-
-      canvasRef.current.appendChild(app.canvas);
-      appRef.current = app;
-
-      // Create room and actor
-      room = new PixiRoom(app);
-      roomRef.current = room;
-
-      actor = new PixiSpriteActor(app, agent.spriteId, 24);
-      actorRef.current = actor;
-
-      // Position actor at center of canvas
-      room.addActor(actor, 130, 90);
-      actor.setState(agent.state);
-    })();
-
-    return () => {
-      // Cleanup on unmount
-      if (actorRef.current) {
-        actorRef.current.destroy();
-        actorRef.current = null;
-      }
-      if (roomRef.current) {
-        roomRef.current.destroy();
-        roomRef.current = null;
-      }
-      if (appRef.current) {
-        appRef.current.destroy(true, { children: true });
-        appRef.current = null;
-      }
-    };
-  }, [agent.spriteId]); // re-create if spriteId changes (rare)
-
-  // Update agent state when it changes
-  useEffect(() => {
-    if (actorRef.current) {
-      actorRef.current.setState(agent.state);
-    }
-  }, [agent.state]);
-
-  const handleClick = () => {
-    setRoute({ name: "room", agentId: agent.id });
-  };
+  const theme = themeForAgent(agent);
+  const visibleAgent = occupant === undefined ? agent : occupant;
+  const isPinned = agent.state === "working" || agent.state === "sleeping";
+  const agentPosition =
+    phase === "homeToDoor"
+      ? "left-1/2 bottom-[5%] -translate-x-1/2 opacity-35 scale-90"
+      : phase === "homeEnter"
+        ? "left-1/2 bottom-[5%] -translate-x-1/2 opacity-70 scale-95"
+        : agent.state === "sleeping"
+          ? "left-[18%] top-[22%]"
+          : isPinned
+            ? "right-[23%] bottom-[29%]"
+            : "left-[45%] bottom-[20%]";
 
   return (
-    <div
-      onClick={handleClick}
-      style={{
-        position: "relative",
-        border: "1px solid #3a3a6a",
-        borderRadius: 8,
-        overflow: "hidden",
-        cursor: "pointer",
-        transition: "border-color 0.2s, transform 0.2s",
-        background: "#0f0f23",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "#6cf093";
-        e.currentTarget.style.transform = "translateY(-2px)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "#3a3a6a";
-        e.currentTarget.style.transform = "translateY(0)";
-      }}
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`pixel-room group relative h-full w-full overflow-hidden rounded border text-left shadow-room transition hover:-translate-y-0.5 ${
+        selected ? "border-cyanLive ring-2 ring-cyanLive/30" : "border-slate-700/80"
+      }`}
+      style={
+        {
+          backgroundColor: theme.wall,
+          "--accent": theme.accent,
+          "--bed": theme.bed,
+        } as CSSProperties
+      }
     >
-      {/* PixiJS canvas container */}
-      <div ref={canvasRef} style={{ display: "block" }} />
+      <div className="absolute inset-x-0 bottom-0 h-[40%]" style={{ background: theme.floor }} />
+      <div className="pixel-bed" />
+      <div className="pixel-desk" />
+      <div className="pixel-monitor" />
+      <div className="pixel-shelf" />
+      <SpecialtyProp prop={theme.prop} />
+      <Door />
 
-      {/* Agent info overlay (HTML on top of canvas) */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: "8px 12px",
-          background: "rgba(15, 15, 35, 0.85)",
-          backdropFilter: "blur(4px)",
-          borderTop: "1px solid rgba(58, 58, 106, 0.5)",
-        }}
-      >
-        <div
-          style={{
-            fontWeight: 600,
-            fontSize: 14,
-            marginBottom: 2,
-            color: "#e5e5f0",
-          }}
-        >
-          {agent.name}
-        </div>
-        <div
-          style={{
-            fontSize: 11,
-            opacity: 0.7,
-            color: "#aaa",
-          }}
-        >
-          {agent.specialty}
-        </div>
+      <div className="absolute left-2 top-2 rounded bg-black/45 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-slate-100">
+        {agent.name}
       </div>
+      <div className="absolute right-2 top-2 rounded border border-white/10 bg-black/35 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider" style={{ color: theme.accent }}>
+        {agent.state}
+      </div>
+
+      {visibleAgent && (
+        <div className={`absolute transition-all duration-700 ease-in-out ${agentPosition}`}>
+          <PixelAgent agent={visibleAgent} sleeping={agent.state === "sleeping"} />
+        </div>
+      )}
+
+      <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-black/45 px-2 py-1.5 text-[10px] text-slate-300 opacity-0 transition group-hover:opacity-100">
+        {theme.name}
+      </div>
+    </button>
+  );
+}
+
+export function PixelAgent({ agent, sleeping = false }: { agent: Agent; sleeping?: boolean }) {
+  return (
+    <div className="relative">
+      <div
+        className={`pixel-agent ${sleeping ? "opacity-55" : ""}`}
+        style={{ "--agent": agentColor(agent) } as CSSProperties}
+        title={agent.name}
+      />
+      {sleeping && <div className="absolute -right-3 -top-5 font-mono text-xs text-white/80">Z</div>}
+    </div>
+  );
+}
+
+function CommandCommons({ occupants, selected, onSelect }: { occupants: Agent[]; selected?: boolean; onSelect?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`pixel-room relative h-full w-full overflow-hidden rounded border bg-[#10142a] text-left shadow-room transition hover:-translate-y-0.5 ${
+        selected ? "border-cyanLive ring-2 ring-cyanLive/30" : "border-cyanLive/30"
+      }`}
+      style={{ "--accent": "#73ffd8" } as CSSProperties}
+    >
+      <div className="absolute inset-x-0 bottom-0 h-[42%] bg-[#161331]" />
+      <div className="absolute left-[14%] top-[13%] h-[22%] w-[72%] border-2 border-cyanLive/40 bg-black/35 shadow-glow">
+        <div className="m-2 h-1.5 w-2/3 bg-cyanLive/70" />
+        <div className="mx-2 mt-2 h-1.5 w-1/2 bg-purple-300/60" />
+      </div>
+      <div className="absolute left-[28%] bottom-[22%] h-[17%] w-[44%] rounded-sm bg-[#493f72] shadow-inner" />
+      <div className="absolute left-2 top-2 rounded bg-black/50 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-cyanLive">
+        Command Commons
+      </div>
+      <div className="absolute bottom-[30%] left-[28%] flex gap-3">
+        {occupants.map((agent) => (
+          <PixelAgent key={agent.id} agent={agent} />
+        ))}
+      </div>
+    </button>
+  );
+}
+
+function EmptyRoom({ slotLabel, selected, onSelect }: { slotLabel?: string; selected?: boolean; onSelect?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`pixel-room relative h-full w-full overflow-hidden rounded border bg-[#0b1020] text-left text-slate-500 transition hover:border-slate-500 ${
+        selected ? "border-cyanLive ring-2 ring-cyanLive/30" : "border-slate-800"
+      }`}
+    >
+      <div className="absolute inset-x-0 bottom-0 h-[38%] bg-[#0d1326]" />
+      <div className="absolute left-3 top-3 font-mono text-[10px] uppercase tracking-[0.18em]">{slotLabel ?? "Vacant Room"}</div>
+      <div className="absolute inset-0 grid place-items-center font-mono text-xs uppercase tracking-[0.18em]">Awaiting Agent</div>
+    </button>
+  );
+}
+
+function Door() {
+  return <div className="pixel-door bottom-0 left-1/2 -translate-x-1/2" />;
+}
+
+function SpecialtyProp({ prop }: { prop: string }) {
+  return (
+    <div className="absolute right-[10%] top-[14%] h-[18%] w-[20%] border border-white/10 bg-black/25 p-1">
+      <div className="mb-1 h-1 bg-[var(--accent)] opacity-75" />
+      <div className="mb-1 h-1 w-2/3 bg-[var(--accent)] opacity-50" />
+      <div className="font-mono text-[7px] uppercase leading-none text-white/45">{prop}</div>
     </div>
   );
 }
