@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Application } from "pixi.js";
 import { PixiRoom, PixiSpriteActor } from "../modules/sprite-engine";
@@ -6,6 +6,7 @@ import type { Agent } from "../types";
 import { useTerrariumStore } from "./store";
 import {
   ROOM_LOOKS,
+  type RoomCustomization,
   type RoomLook,
   useRoomCustomization,
 } from "./room-customization";
@@ -14,7 +15,8 @@ import { ChatPanel } from "./ChatPanel";
 export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObject<WebSocket | null> }) {
   const setRoute = useTerrariumStore((s) => s.setRoute);
   const [room, setRoom] = useRoomCustomization(agent.id);
-  const [chatOpen, setChatOpen] = useState(false);
+  const streaming = useTerrariumStore((s) => s.streamingMessages.get(agent.id));
+  const isChatLoading = useTerrariumStore((s) => s.chatLoading.has(agent.id));
   const look = ROOM_LOOKS[room.look];
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
@@ -79,8 +81,14 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
     reader.readAsDataURL(file);
   };
 
+  const bubbleText = streaming?.content
+    ? summarizeForBubble(streaming.content)
+    : isChatLoading
+      ? "I'll check my desk terminal…"
+      : undefined;
+
   return (
-    <div style={{ padding: 24, maxWidth: 1180, margin: "0 auto", width: "100%" }}>
+    <div style={{ padding: 24, maxWidth: 1480, margin: "0 auto", width: "100%" }}>
       <button
         onClick={() => setRoute({ name: "grid" })}
         style={ghostButtonStyle}
@@ -91,142 +99,176 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(520px, 1fr) 320px",
+          gridTemplateColumns: "minmax(460px, 0.95fr) minmax(560px, 1.25fr)",
           gap: 24,
           alignItems: "start",
           marginTop: 18,
         }}
       >
-        <section
-          style={{
-            border: "1px solid rgba(255,255,255,0.18)",
-            borderRadius: 24,
-            overflow: "hidden",
-            background: "#111123",
-            boxShadow: `0 24px 80px ${look.glow}`,
-            position: "relative",
-          }}
-        >
-          <RoomScene agent={agent} roomImage={room.imageDataUrl} look={room.look}>
-            <div ref={canvasRef} style={{ position: "absolute", inset: 0, zIndex: 5 }} />
-          </RoomScene>
+        <div style={{ display: "grid", gap: 14 }}>
+          <section
+            style={{
+              border: "1px solid rgba(255,255,255,0.18)",
+              borderRadius: 24,
+              overflow: "hidden",
+              background: "#111123",
+              boxShadow: `0 24px 80px ${look.glow}`,
+              position: "relative",
+            }}
+          >
+            <RoomScene agent={agent} roomImage={room.imageDataUrl} look={room.look}>
+              <div ref={canvasRef} style={{ position: "absolute", inset: 0, zIndex: 5 }} />
+              <DeskTerminal active={Boolean(isChatLoading || streaming)} accent={look.accent} />
+              {bubbleText && <SpeechBubble text={bubbleText} />}
+            </RoomScene>
+          </section>
 
-          {/* Talk button overlay */}
-          {!chatOpen && (
-            <button
-              onClick={() => setChatOpen(true)}
-              style={{
-                position: "absolute",
-                bottom: 18,
-                right: 18,
-                zIndex: 10,
-                padding: "10px 20px",
-                borderRadius: 12,
-                border: "1px solid rgba(107, 157, 255, 0.5)",
-                background: "rgba(107, 157, 255, 0.18)",
-                color: "#b8d0ff",
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: "pointer",
-                backdropFilter: "blur(8px)",
-                transition: "all 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(107, 157, 255, 0.32)";
-                e.currentTarget.style.color = "#fff";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "rgba(107, 157, 255, 0.18)";
-                e.currentTarget.style.color = "#b8d0ff";
-              }}
-            >
-              💬 Talk
-            </button>
-          )}
-        </section>
-
-        {/* Right panel: Chat or Room Settings */}
-        {chatOpen ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 420 }}>
-            <button
-              onClick={() => setChatOpen(false)}
-              style={{
-                alignSelf: "flex-end",
-                padding: "6px 12px",
-                borderRadius: 8,
-                border: "1px solid #3a3d66",
-                background: "rgba(255,255,255,0.04)",
-                color: "#9294b8",
-                fontSize: 11,
-                cursor: "pointer",
-              }}
-            >
-              ← Settings
-            </button>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <ChatPanel agent={agent} ws={ws} />
-            </div>
-          </div>
-        ) : (
-        <aside
-          style={{
-            border: "1px solid #2f3159",
-            borderRadius: 18,
-            padding: 18,
-            background: "rgba(10, 10, 25, 0.82)",
-          }}
-        >
-          <h2 style={{ margin: "0 0 4px", fontSize: 22 }}>{agent.name}</h2>
-          <p style={{ margin: "0 0 18px", color: "#aeb0ce", fontSize: 13 }}>
-            {agent.specialty} · {agent.state}
-          </p>
-
-          <label style={labelStyle}>Room look</label>
-          <div style={{ display: "grid", gap: 8, marginBottom: 18 }}>
-            {(Object.keys(ROOM_LOOKS) as RoomLook[]).map((key) => (
-              <button
-                key={key}
-                onClick={() => setRoom({ ...room, look: key })}
-                style={{
-                  ...choiceButtonStyle,
-                  borderColor: room.look === key ? ROOM_LOOKS[key].accent : "#36385f",
-                  color: room.look === key ? "#fff" : "#b9bad2",
-                }}
-              >
-                <span
-                  style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 6,
-                    background: ROOM_LOOKS[key].wallpaper,
-                    border: `1px solid ${ROOM_LOOKS[key].accent}`,
-                  }}
-                />
-                {ROOM_LOOKS[key].label}
-              </button>
-            ))}
-          </div>
-
-          <label style={labelStyle}>Backdrop image</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(event) => uploadImage(event.currentTarget.files?.[0])}
-            style={{ width: "100%", color: "#cfd0e8", marginBottom: 12 }}
+          <RoomSettingsCard
+            agent={agent}
+            room={room}
+            setRoom={setRoom}
+            uploadImage={uploadImage}
           />
-          {room.imageDataUrl && (
-            <button
-              onClick={() => setRoom({ ...room, imageDataUrl: undefined })}
-              style={ghostButtonStyle}
-            >
-              Remove uploaded image
-            </button>
-          )}
-        </aside>
-        )}
+        </div>
+
+        <ChatPanel agent={agent} ws={ws} />
       </div>
     </div>
   );
+}
+
+function RoomSettingsCard({
+  agent,
+  room,
+  setRoom,
+  uploadImage,
+}: {
+  agent: Agent;
+  room: RoomCustomization;
+  setRoom: (next: RoomCustomization) => void;
+  uploadImage: (file: File | undefined) => void;
+}) {
+  return (
+    <aside
+      style={{
+        border: "1px solid #2f3159",
+        borderRadius: 18,
+        padding: 16,
+        background: "rgba(10, 10, 25, 0.72)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+        <div>
+          <h2 style={{ margin: "0 0 4px", fontSize: 18 }}>{agent.name}</h2>
+          <p style={{ margin: 0, color: "#aeb0ce", fontSize: 12 }}>
+            {agent.specialty} · {agent.state}
+          </p>
+        </div>
+        <span style={{ color: "#7f83a5", fontSize: 11 }}>Room controls</span>
+      </div>
+
+      <label style={labelStyle}>Room look</label>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
+        {(Object.keys(ROOM_LOOKS) as RoomLook[]).map((key) => (
+          <button
+            key={key}
+            onClick={() => setRoom({ ...room, look: key })}
+            style={{
+              ...choiceButtonStyle,
+              borderColor: room.look === key ? ROOM_LOOKS[key].accent : "#36385f",
+              color: room.look === key ? "#fff" : "#b9bad2",
+            }}
+          >
+            <span
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: 5,
+                background: ROOM_LOOKS[key].wallpaper,
+                border: `1px solid ${ROOM_LOOKS[key].accent}`,
+              }}
+            />
+            {ROOM_LOOKS[key].label}
+          </button>
+        ))}
+      </div>
+
+      <label style={labelStyle}>Backdrop image</label>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(event) => uploadImage(event.currentTarget.files?.[0])}
+          style={{ color: "#cfd0e8", maxWidth: 260 }}
+        />
+        {room.imageDataUrl && (
+          <button
+            onClick={() => setRoom({ ...room, imageDataUrl: undefined })}
+            style={ghostButtonStyle}
+          >
+            Remove image
+          </button>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function DeskTerminal({ active, accent }: { active: boolean; accent: string }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        right: "16%",
+        bottom: "30%",
+        zIndex: 7,
+        width: 96,
+        height: 58,
+        borderRadius: 10,
+        border: `2px solid ${accent}`,
+        background: "linear-gradient(180deg, #07121d, #040713)",
+        boxShadow: active ? `0 0 28px ${accent}` : `0 0 12px ${accent}66`,
+        opacity: 0.92,
+      }}
+    >
+      <div style={{ margin: "10px auto 0", width: "72%", height: 4, background: accent, opacity: 0.85 }} />
+      <div style={{ margin: "8px auto 0", width: "46%", height: 4, background: accent, opacity: active ? 1 : 0.45 }} />
+    </div>
+  );
+}
+
+function SpeechBubble({ text }: { text: string }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: "38%",
+        top: "21%",
+        zIndex: 9,
+        maxWidth: 250,
+        padding: "10px 13px",
+        borderRadius: "16px 16px 16px 4px",
+        border: "1px solid rgba(255,255,255,0.22)",
+        background: "rgba(8, 10, 24, 0.86)",
+        color: "#f4f6ff",
+        fontSize: 12,
+        lineHeight: 1.45,
+        boxShadow: "0 14px 38px rgba(0,0,0,0.38)",
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
+function summarizeForBubble(content: string): string {
+  const cleaned = content
+    .replace(/```[\s\S]*?```/g, "code snippet")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "Writing it up…";
+  return cleaned.length > 86 ? `${cleaned.slice(0, 83)}…` : cleaned;
 }
 
 export function RoomScene({
