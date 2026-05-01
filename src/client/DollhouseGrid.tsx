@@ -13,7 +13,7 @@ type Selection =
 const ROOM_SLOTS = [0, 1, 2, 3, 5, 6, 7, 8];
 
 /** Mission-control 3x3 office floorplan. */
-export function DollhouseGrid() {
+export function DollhouseGrid({ ws }: { ws: React.MutableRefObject<WebSocket | null> }) {
   const agents = useTerrariumStore((s) => s.agentList);
   const setWizardOpen = useTerrariumStore((s) => s.setWizardOpen);
   const setRoute = useTerrariumStore((s) => s.setRoute);
@@ -75,6 +75,7 @@ export function DollhouseGrid() {
                 <RoomTile
                   key={slot}
                   agent={agent}
+                  ws={ws}
                   occupant={isInCommons ? null : agent}
                   phase={visual?.phase}
                   slotLabel={`Room ${slot + 1}`}

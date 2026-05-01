@@ -5,6 +5,7 @@ import EmptyTerrarium from "./EmptyTerrarium";
 import { DollhouseGrid } from "./DollhouseGrid";
 import { SummoningWizard } from "./SummoningWizard";
 import { AgentRoom } from "./AgentRoom";
+import { useAgentAutoSleep } from "./useAgentAutoSleep";
 
 /**
  * App shell.
@@ -33,6 +34,7 @@ export default function App() {
   const clearError = useTerrariumStore((s) => s.clearError);
 
   const isEmpty = agentListLoaded && agents.size === 0;
+  useAgentAutoSleep(agents, ws);
   const [emptyDissolving, setEmptyDissolving] = useState(false);
   const wasEmpty = useRef(isEmpty);
 
@@ -76,7 +78,7 @@ export default function App() {
         ) : (
           <ViewFadeIn>
             {route.name === "grid" ? (
-              <DollhouseGrid />
+              <DollhouseGrid ws={ws} />
             ) : route.name === "room" ? (
               <AgentRoomView agentId={route.agentId} ws={ws} />
             ) : (

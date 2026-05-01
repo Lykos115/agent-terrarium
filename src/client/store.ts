@@ -395,6 +395,10 @@ export function requestRestoreAgent(ws: WebSocket, agentId: string): void {
   sendClientMessage(ws, { type: "restore_agent", data: { agentId } });
 }
 
+export function requestUpdateAgent(ws: WebSocket, agentId: string, changes: Partial<Agent>): void {
+  sendClientMessage(ws, { type: "update_agent", data: { agentId, changes } });
+}
+
 export function sendChatMessage(ws: WebSocket, agentId: string, message: string): void {
   sendClientMessage(ws, { type: "chat", data: { agentId, message } });
 }

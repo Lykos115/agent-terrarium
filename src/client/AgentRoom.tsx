@@ -11,6 +11,7 @@ import {
 import { ChatPanel } from "./ChatPanel";
 import { themeForAgent } from "./office-theme";
 import { AgentSpeechBubble } from "./AgentSpeechBubble";
+import { wakeAgent } from "./useAgentAutoSleep";
 
 export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObject<WebSocket | null> }) {
   const setRoute = useTerrariumStore((s) => s.setRoute);
@@ -70,6 +71,26 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
     actorRef.current?.setState(visualState);
   }, [visualState]);
 
+  useEffect(() => {
+    if (visualState !== "idle" || dismissing) return;
+    let cancelled = false;
+    let timer: number | null = null;
+
+    const wander = () => {
+      if (cancelled) return;
+      const x = 120 + Math.random() * 280;
+      const y = 205 + Math.random() * 85;
+      actorRef.current?.walkTo(x, y, 1_800 + Math.random() * 900);
+      timer = window.setTimeout(wander, 3_200 + Math.random() * 3_000);
+    };
+
+    timer = window.setTimeout(wander, 1_200 + Math.random() * 1_500);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [visualState, dismissing]);
+
   const uploadImage = (file: File | undefined) => {
     if (!file) return;
     const reader = new FileReader();
@@ -120,6 +141,7 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
       >
         <div style={{ display: "grid", gap: 14 }}>
           <section
+            onClick={() => wakeAgent(agent, ws)}
             style={{
               border: "1px solid rgba(255,255,255,0.18)",
               borderRadius: 24,
@@ -127,6 +149,7 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
               background: "#111123",
               boxShadow: `0 24px 80px ${theme.accent}33`,
               position: "relative",
+              cursor: agent.state === "sleeping" ? "pointer" : "default",
             }}
           >
             <RoomScene agent={agent} roomImage={room.imageDataUrl}>
@@ -141,6 +164,7 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
                 scale="room"
                 style={{ left: "38%", top: "21%" }}
               />
+              {agent.state === "sleeping" && <div style={roomZzzStyle}>Zzz</div>}
             </RoomScene>
           </section>
 
@@ -293,6 +317,17 @@ export function RoomScene({
     </div>
   );
 }
+
+const roomZzzStyle: CSSProperties = {
+  position: "absolute",
+  left: "54%",
+  top: "34%",
+  zIndex: 10,
+  color: "rgba(255,255,255,0.78)",
+  fontFamily: "monospace",
+  fontSize: 18,
+  animation: "agent-zzz-float 1.8s ease-in-out infinite",
+};
 
 const dangerZoneStyle: CSSProperties = {
   marginTop: 16,

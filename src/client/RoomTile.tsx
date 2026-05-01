@@ -6,6 +6,7 @@ import { PixiSpriteActor, type SpriteState } from "../modules/sprite-engine";
 import type { AgentVisualPhase } from "./useAgentOfficeLocations";
 import { agentColor, themeForAgent } from "./office-theme";
 import { AgentSpeechBubble } from "./AgentSpeechBubble";
+import { wakeAgent } from "./useAgentAutoSleep";
 
 export type RoomTileVariant = "home" | "commons" | "empty";
 
@@ -20,6 +21,7 @@ interface RoomTileProps {
   onSelect?: () => void;
   /** Navigate into the room view (double-click). */
   onEnter?: () => void;
+  ws?: React.MutableRefObject<WebSocket | null>;
 }
 
 export function RoomTile({
@@ -32,6 +34,7 @@ export function RoomTile({
   phase = "home",
   onSelect,
   onEnter,
+  ws,
 }: RoomTileProps) {
   const [summoning, setSummoning] = useState(false);
 
@@ -69,13 +72,14 @@ export function RoomTile({
       type="button"
       onClick={() => {
         if (summoning) return;
+        if (ws && wakeAgent(agent, ws)) return;
         onSelect?.();
         onEnter?.();
       }}
       disabled={summoning}
       className={`pixel-room group relative aspect-[4/3] h-full w-full overflow-hidden rounded border text-left shadow-room transition hover:-translate-y-0.5 ${
-        selected ? "border-cyanLive ring-2 ring-cyanLive/30" : "border-slate-700/80"
-      }`}
+        agent.state === "sleeping" ? "room-sleeping" : ""
+      } ${selected ? "border-cyanLive ring-2 ring-cyanLive/30" : "border-slate-700/80"}`}
       style={
         {
           backgroundColor: theme.wall,
@@ -104,6 +108,9 @@ export function RoomTile({
         <div className={`absolute transition-all duration-700 ease-in-out ${agentPosition} ${summoning ? "agent-materialize" : ""}`}>
           <AgentSpeechBubble agent={visibleAgent} scale="grid" />
           <PixiAgentCanvas agent={visibleAgent} size={76} />
+          {visibleAgent.state === "sleeping" && (
+            <div className="absolute -right-2 -top-3 font-mono text-xs text-white/80">Zzz</div>
+          )}
         </div>
       )}
 
@@ -174,6 +181,27 @@ function PixiAgentCanvas({ agent, size = 64 }: { agent: Agent; size?: number }) 
   useEffect(() => {
     actorRef.current?.setState(agent.state as SpriteState);
   }, [agent.state]);
+
+  useEffect(() => {
+    if (agent.state !== "idle") return;
+    let cancelled = false;
+    let timer: number | null = null;
+
+    const wander = () => {
+      if (cancelled) return;
+      const margin = size * 0.22;
+      const x = margin + Math.random() * (size - margin * 2);
+      const y = margin + Math.random() * (size - margin * 1.6);
+      actorRef.current?.walkTo(x, y, 1_100 + Math.random() * 700);
+      timer = window.setTimeout(wander, 2_200 + Math.random() * 2_200);
+    };
+
+    timer = window.setTimeout(wander, 900 + Math.random() * 1_000);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [agent.state, size]);
 
   return (
     <div
