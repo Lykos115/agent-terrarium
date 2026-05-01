@@ -5,6 +5,7 @@ import type { Agent } from "../types";
 import { PixiSpriteActor, type SpriteState } from "../modules/sprite-engine";
 import type { AgentVisualPhase } from "./useAgentOfficeLocations";
 import { agentColor, themeForAgent } from "./office-theme";
+import { AgentSpeechBubble } from "./AgentSpeechBubble";
 
 export type RoomTileVariant = "home" | "commons" | "empty";
 
@@ -89,6 +90,7 @@ export function RoomTile({
 
       {visibleAgent && (
         <div className={`absolute transition-all duration-700 ease-in-out ${agentPosition}`}>
+          <AgentSpeechBubble agent={visibleAgent} scale="grid" />
           <PixiAgentCanvas agent={visibleAgent} size={76} />
         </div>
       )}

@@ -178,6 +178,62 @@
   }
 }
 
+.agent-speech-bubble {
+  position: absolute;
+  z-index: 12;
+  max-width: 230px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(8, 10, 24, 0.88);
+  color: #f4f6ff;
+  line-height: 1.35;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(8px);
+  animation: speech-bubble-lifetime 4s ease-in-out both;
+  pointer-events: none;
+}
+
+.agent-speech-bubble::after {
+  content: "";
+  position: absolute;
+  left: 24px;
+  bottom: -7px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 7px solid rgba(8, 10, 24, 0.88);
+}
+
+.agent-speech-bubble--grid {
+  left: 50%;
+  bottom: calc(100% - 6px);
+  min-width: 110px;
+  --bubble-anchor: translateX(-22%);
+  transform: var(--bubble-anchor);
+  padding: 7px 9px;
+  border-radius: 12px 12px 12px 4px;
+  font-size: 10px;
+}
+
+.agent-speech-bubble--room {
+  padding: 10px 13px;
+  border-radius: 16px 16px 16px 4px;
+  font-size: 12px;
+}
+
+@keyframes speech-bubble-lifetime {
+  0% {
+    opacity: 0;
+    transform: var(--bubble-anchor, translateX(0)) translateY(8px) scale(0.96);
+  }
+  10%, 82% {
+    opacity: 1;
+    transform: var(--bubble-anchor, translateX(0)) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: var(--bubble-anchor, translateX(0)) translateY(-6px) scale(0.98);
+  }
+}
+
 /* Chat panel animations */
 @keyframes blink {
   0%, 100% { opacity: 1; }

@@ -10,6 +10,7 @@ import {
 } from "./room-customization";
 import { ChatPanel } from "./ChatPanel";
 import { themeForAgent } from "./office-theme";
+import { AgentSpeechBubble } from "./AgentSpeechBubble";
 
 export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObject<WebSocket | null> }) {
   const setRoute = useTerrariumStore((s) => s.setRoute);
@@ -114,7 +115,12 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
           >
             <RoomScene agent={agent} roomImage={room.imageDataUrl}>
               <div ref={canvasRef} style={{ position: "absolute", inset: 0, zIndex: 5, pointerEvents: "none" }} />
-              {bubbleText && <SpeechBubble text={bubbleText} />}
+              <AgentSpeechBubble
+                agent={agent}
+                text={bubbleText}
+                scale="room"
+                style={{ left: "38%", top: "21%" }}
+              />
             </RoomScene>
           </section>
 
@@ -180,31 +186,6 @@ function RoomSettingsCard({
         )}
       </div>
     </aside>
-  );
-}
-
-function SpeechBubble({ text }: { text: string }) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: "38%",
-        top: "21%",
-        zIndex: 9,
-        maxWidth: 250,
-        padding: "10px 13px",
-        borderRadius: "16px 16px 16px 4px",
-        border: "1px solid rgba(255,255,255,0.22)",
-        background: "rgba(8, 10, 24, 0.86)",
-        color: "#f4f6ff",
-        fontSize: 12,
-        lineHeight: 1.45,
-        boxShadow: "0 14px 38px rgba(0,0,0,0.38)",
-        backdropFilter: "blur(8px)",
-      }}
-    >
-      {text}
-    </div>
   );
 }
 
