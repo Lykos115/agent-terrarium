@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Application } from "pixi.js";
 import { PixiSpriteActor } from "../modules/sprite-engine";
 import type { Agent } from "../types";
-import { useTerrariumStore } from "./store";
+import { requestArchiveAgent, useTerrariumStore } from "./store";
 import {
   type RoomCustomization,
   useRoomCustomization,
@@ -15,6 +15,7 @@ import { AgentSpeechBubble } from "./AgentSpeechBubble";
 export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObject<WebSocket | null> }) {
   const setRoute = useTerrariumStore((s) => s.setRoute);
   const [room, setRoom] = useRoomCustomization(agent.id);
+  const [dismissing, setDismissing] = useState(false);
   const streaming = useTerrariumStore((s) => s.streamingMessages.get(agent.id));
   const isChatLoading = useTerrariumStore((s) => s.chatLoading.has(agent.id));
   const theme = themeForAgent(agent);
@@ -26,6 +27,7 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const actorRef = useRef<PixiSpriteActor | null>(null);
+  const dismissTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -56,6 +58,7 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
     })();
 
     return () => {
+      if (dismissTimeoutRef.current) window.clearTimeout(dismissTimeoutRef.current);
       actorRef.current?.destroy();
       actorRef.current = null;
       appRef.current?.destroy(true, { children: true });
@@ -78,9 +81,22 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
     reader.readAsDataURL(file);
   };
 
-  const bubbleText = streaming?.content
-    ? summarizeForBubble(streaming.content)
-    : isChatLoading
+  const dismissAgent = () => {
+    if (!ws.current || dismissing) return;
+    const confirmed = window.confirm(`Dismiss ${agent.name}? They will be archived and can be restored later.`);
+    if (!confirmed) return;
+    setDismissing(true);
+    actorRef.current?.walkTo(500, 250, 1_200);
+    dismissTimeoutRef.current = window.setTimeout(() => {
+      if (ws.current) requestArchiveAgent(ws.current, agent.id);
+    }, 1_500);
+  };
+
+  const bubbleText = dismissing
+    ? `${agent.name} is heading out…`
+    : streaming?.content
+      ? summarizeForBubble(streaming.content)
+      : isChatLoading
       ? "I'll check my desk terminal…"
       : undefined;
 
@@ -114,7 +130,11 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
             }}
           >
             <RoomScene agent={agent} roomImage={room.imageDataUrl}>
-              <div ref={canvasRef} style={{ position: "absolute", inset: 0, zIndex: 5, pointerEvents: "none" }} />
+              <div
+                ref={canvasRef}
+                className={dismissing ? "agent-dismiss-dissolve" : undefined}
+                style={{ position: "absolute", inset: 0, zIndex: 5, pointerEvents: "none" }}
+              />
               <AgentSpeechBubble
                 agent={agent}
                 text={bubbleText}
@@ -129,6 +149,8 @@ export function AgentRoom({ agent, ws }: { agent: Agent; ws: React.MutableRefObj
             room={room}
             setRoom={setRoom}
             uploadImage={uploadImage}
+            dismissing={dismissing}
+            onDismiss={dismissAgent}
           />
         </div>
 
@@ -143,11 +165,15 @@ function RoomSettingsCard({
   room,
   setRoom,
   uploadImage,
+  dismissing,
+  onDismiss,
 }: {
   agent: Agent;
   room: RoomCustomization;
   setRoom: (next: RoomCustomization) => void;
   uploadImage: (file: File | undefined) => void;
+  dismissing: boolean;
+  onDismiss: () => void;
 }) {
   return (
     <aside
@@ -175,15 +201,29 @@ function RoomSettingsCard({
           accept="image/*"
           onChange={(event) => uploadImage(event.currentTarget.files?.[0])}
           style={{ color: "#cfd0e8", maxWidth: 260 }}
+          disabled={dismissing}
         />
         {room.imageDataUrl && (
           <button
             onClick={() => setRoom({ ...room, imageDataUrl: undefined })}
             style={ghostButtonStyle}
+            disabled={dismissing}
           >
             Remove image
           </button>
         )}
+      </div>
+
+      <div style={dangerZoneStyle}>
+        <div>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#ffd0d0" }}>Dismiss Agent</h3>
+          <p style={{ margin: 0, color: "#aeb0ce", fontSize: 12, lineHeight: 1.5 }}>
+            Archive {agent.name} after a short walk-off animation. They can be restored later.
+          </p>
+        </div>
+        <button onClick={onDismiss} disabled={dismissing} style={dangerButtonStyle}>
+          {dismissing ? "Dismissing…" : "Dismiss"}
+        </button>
       </div>
     </aside>
   );
@@ -253,6 +293,28 @@ export function RoomScene({
     </div>
   );
 }
+
+const dangerZoneStyle: CSSProperties = {
+  marginTop: 16,
+  padding: 12,
+  border: "1px solid rgba(240,108,108,0.32)",
+  borderRadius: 14,
+  background: "rgba(240,108,108,0.08)",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  alignItems: "center",
+};
+
+const dangerButtonStyle: CSSProperties = {
+  padding: "9px 12px",
+  border: "1px solid rgba(240,108,108,0.5)",
+  borderRadius: 10,
+  background: "rgba(240,108,108,0.16)",
+  color: "#ffd6d6",
+  cursor: "pointer",
+  fontWeight: 800,
+};
 
 const labelStyle: CSSProperties = {
   display: "block",

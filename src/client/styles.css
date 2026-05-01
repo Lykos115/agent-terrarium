@@ -178,6 +178,73 @@
   }
 }
 
+.summon-sparkle-field {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(115, 255, 216, 0.55) 0 2px, transparent 3px),
+    radial-gradient(circle at 42% 52%, rgba(216, 139, 255, 0.65) 0 2px, transparent 3px),
+    radial-gradient(circle at 58% 58%, rgba(255, 200, 111, 0.65) 0 2px, transparent 3px),
+    radial-gradient(circle at 38% 38%, rgba(255, 255, 255, 0.72) 0 1.5px, transparent 3px),
+    radial-gradient(circle at 64% 36%, rgba(115, 157, 255, 0.65) 0 1.5px, transparent 3px);
+  filter: drop-shadow(0 0 10px rgba(115, 255, 216, 0.8));
+  animation: summon-sparkle-burst 2s ease-out both;
+}
+
+.agent-materialize {
+  animation: agent-materialize 2s ease-out both;
+}
+
+.agent-dismiss-dissolve {
+  animation: agent-dismiss-dissolve 1.5s ease-in both;
+}
+
+@keyframes summon-sparkle-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.55) rotate(0deg);
+  }
+  18%, 70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.45) rotate(35deg);
+  }
+}
+
+@keyframes agent-materialize {
+  0% {
+    opacity: 0;
+    filter: blur(5px) brightness(2.4);
+  }
+  45% {
+    opacity: 1;
+    filter: blur(0) brightness(1.8);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0) brightness(1);
+  }
+}
+
+@keyframes agent-dismiss-dissolve {
+  0% {
+    opacity: 1;
+    filter: blur(0) brightness(1);
+  }
+  70% {
+    opacity: 0.55;
+    filter: blur(1px) brightness(1.5);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(5px) brightness(2.2);
+  }
+}
+
 .agent-speech-bubble {
   position: absolute;
   z-index: 12;

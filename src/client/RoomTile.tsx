@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Application } from "pixi.js";
 import type { Agent } from "../types";
@@ -33,6 +33,15 @@ export function RoomTile({
   onSelect,
   onEnter,
 }: RoomTileProps) {
+  const [summoning, setSummoning] = useState(false);
+
+  useEffect(() => {
+    if (!agent) return;
+    setSummoning(true);
+    const timeout = window.setTimeout(() => setSummoning(false), 2_000);
+    return () => window.clearTimeout(timeout);
+  }, [agent?.id]);
+
   if (variant === "commons") {
     return <CommandCommons occupants={occupants ?? (occupant ? [occupant] : [])} selected={selected} onSelect={onSelect} />;
   }
@@ -59,9 +68,11 @@ export function RoomTile({
     <button
       type="button"
       onClick={() => {
+        if (summoning) return;
         onSelect?.();
         onEnter?.();
       }}
+      disabled={summoning}
       className={`pixel-room group relative aspect-[4/3] h-full w-full overflow-hidden rounded border text-left shadow-room transition hover:-translate-y-0.5 ${
         selected ? "border-cyanLive ring-2 ring-cyanLive/30" : "border-slate-700/80"
       }`}
@@ -74,6 +85,7 @@ export function RoomTile({
       }
     >
       <div className="absolute inset-x-0 bottom-0 h-[40%]" style={{ background: theme.floor }} />
+      {summoning && <div className="summon-sparkle-field" aria-hidden="true" />}
       <div className="pixel-bed" />
       <div className="pixel-desk" />
       <div className="pixel-monitor" />
@@ -89,7 +101,7 @@ export function RoomTile({
       </div>
 
       {visibleAgent && (
-        <div className={`absolute transition-all duration-700 ease-in-out ${agentPosition}`}>
+        <div className={`absolute transition-all duration-700 ease-in-out ${agentPosition} ${summoning ? "agent-materialize" : ""}`}>
           <AgentSpeechBubble agent={visibleAgent} scale="grid" />
           <PixiAgentCanvas agent={visibleAgent} size={76} />
         </div>
