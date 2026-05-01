@@ -1,5 +1,6 @@
-import { join } from "node:path";
-import { existsSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { existsSync, statSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { spawn, type ChildProcess } from "node:child_process";
 import { TerrariumWebSocketRelay } from "../modules/ws-relay";
 import {
@@ -8,6 +9,34 @@ import {
   seedAgents,
 } from "../modules/agent-store";
 import { HermesGatewayAdapter, StubHermesGateway } from "../modules/hermes-gateway";
+
+// ---------------------------------------------------------------------------
+// Load .env files — project .env first, then Hermes .env as fallback
+// Only sets vars that aren't already in process.env.
+// ---------------------------------------------------------------------------
+function loadEnvFile(filePath: string): void {
+  if (!existsSync(filePath)) return;
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx < 0) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const value = trimmed.slice(eqIdx + 1).trim();
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  } catch {
+    // Ignore read errors
+  }
+}
+
+// Project .env takes priority over Hermes .env
+loadEnvFile(join(import.meta.dir, "../../.env"));
+loadEnvFile(join(homedir(), ".hermes/.env"));
 
 const PORT = 3000;
 const VITE_PORT = 5173;
@@ -23,10 +52,18 @@ const seedCount = (await store.listAgents()).length;
 console.log(`[db] SQLite ready — ${seedCount} agent(s) loaded`);
 
 // Init Hermes gateway
+// HERMES_API_KEY takes priority; fall back to API_SERVER_KEY (Hermes' own env
+// convention) so the terrarium works out of the box when Hermes is running
+// locally with its standard .env.
 const HERMES_URL = process.env.HERMES_URL ?? "http://localhost:8642";
-const HERMES_API_KEY = process.env.HERMES_API_KEY ?? "";
+const HERMES_API_KEY = process.env.HERMES_API_KEY || process.env.API_SERVER_KEY || "";
 const hermes = new HermesGatewayAdapter(HERMES_URL, HERMES_API_KEY);
-console.log(`[hermes] Gateway configured for ${HERMES_URL}`);
+console.log(`[hermes] Gateway configured for ${HERMES_URL} (auth: ${HERMES_API_KEY ? "yes" : "none"})`);
+
+// Source Hermes .env if no key was found in the environment
+if (!HERMES_API_KEY) {
+  console.warn(`[hermes] No API key found. Set HERMES_API_KEY or API_SERVER_KEY if Hermes requires auth.`);
+}
 
 // Init WebSocket relay backed by the agent store + Hermes
 const relay = new TerrariumWebSocketRelay(store);
