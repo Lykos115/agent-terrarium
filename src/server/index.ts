@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
-import { StubWebSocketRelay } from "../modules/ws-relay";
+import { TerrariumWebSocketRelay } from "../modules/ws-relay";
 import {
   initDatabase,
   SqliteAgentStore,
@@ -21,8 +21,8 @@ await seedAgents(store);
 const seedCount = (await store.listAgents()).length;
 console.log(`[db] SQLite ready — ${seedCount} agent(s) loaded`);
 
-// Init WebSocket relay stub
-const relay = new StubWebSocketRelay();
+// Init WebSocket relay backed by the agent store
+const relay = new TerrariumWebSocketRelay(store);
 
 // Path to static files
 const distDir = join(import.meta.dir, "../../dist");

@@ -1,8 +1,9 @@
 /**
  * Sprite Engine — PixiJS-based rendering layer.
  *
- * Exports SpriteActor and Room interfaces for the React Canvas component.
- * Stub returns no-op implementations until PixiJS integration in follow-up.
+ * Exports SpriteActor and Room interfaces consumed by the React components
+ * that render agent rooms. Stubs return no-op implementations; #6 replaces
+ * them with real PixiJS-backed classes.
  */
 
 export type SpriteState = "idle" | "thinking" | "working" | "sleeping";
