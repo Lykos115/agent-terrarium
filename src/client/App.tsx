@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTerrarium } from "./useTerrarium";
-import { useTerrariumStore, requestCreateAgent } from "./store";
+import { pathToRoute, useTerrariumStore, requestCreateAgent } from "./store";
 import EmptyTerrarium from "./EmptyTerrarium";
 import { DollhouseGrid } from "./DollhouseGrid";
 import { SummoningWizard } from "./SummoningWizard";
@@ -27,6 +27,7 @@ export default function App() {
   const agentListLoaded = useTerrariumStore((s) => s.agentListLoaded);
   const agents = useTerrariumStore((s) => s.agents);
   const route = useTerrariumStore((s) => s.route);
+  const replaceRoute = useTerrariumStore((s) => s.replaceRoute);
   const connection = useTerrariumStore((s) => s.connection);
   const lastError = useTerrariumStore((s) => s.lastError);
   const clearError = useTerrariumStore((s) => s.clearError);
@@ -34,6 +35,13 @@ export default function App() {
   const isEmpty = agentListLoaded && agents.size === 0;
   const [emptyDissolving, setEmptyDissolving] = useState(false);
   const wasEmpty = useRef(isEmpty);
+
+  useEffect(() => {
+    const syncFromLocation = () => replaceRoute(pathToRoute(window.location.pathname));
+    syncFromLocation();
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
+  }, [replaceRoute]);
 
   useEffect(() => {
     if (wasEmpty.current && !isEmpty && agentListLoaded && agents.size > 0) {

@@ -79,6 +79,7 @@ export interface TerrariumState {
   setConnection: (status: TerrariumState["connection"]) => void;
   applyServerMessage: (message: ServerMessage) => void;
   setRoute: (route: Route) => void;
+  replaceRoute: (route: Route) => void;
   clearError: () => void;
   setWizardOpen: (open: boolean) => void;
   /** Add a user message to chat history (called before sending to WS). */
@@ -123,6 +124,32 @@ function chatMsgId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export function routeToPath(route: Route): string {
+  switch (route.name) {
+    case "grid":
+      return "/";
+    case "room":
+      return `/room/${encodeURIComponent(route.agentId)}`;
+    case "editor":
+      return `/editor/${encodeURIComponent(route.agentId)}`;
+  }
+}
+
+export function pathToRoute(pathname: string): Route {
+  const roomMatch = pathname.match(/^\/room\/([^/]+)\/?$/);
+  if (roomMatch) return { name: "room", agentId: decodeURIComponent(roomMatch[1]!) };
+  const editorMatch = pathname.match(/^\/editor\/([^/]+)\/?$/);
+  if (editorMatch) return { name: "editor", agentId: decodeURIComponent(editorMatch[1]!) };
+  return { name: "grid" };
+}
+
+function syncBrowserUrl(route: Route, mode: "push" | "replace"): void {
+  if (typeof window === "undefined") return;
+  const path = routeToPath(route);
+  if (window.location.pathname === path) return;
+  window.history[mode === "push" ? "pushState" : "replaceState"]({ route }, "", path);
+}
+
 export const useTerrariumStore = create<TerrariumState>((set, get) => ({
   connection: "connecting",
   agents: new Map(),
@@ -138,7 +165,15 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
 
   setConnection: (status) => set({ connection: status }),
 
-  setRoute: (route) => set({ route }),
+  setRoute: (route) => {
+    syncBrowserUrl(route, "push");
+    set({ route });
+  },
+
+  replaceRoute: (route) => {
+    syncBrowserUrl(route, "replace");
+    set({ route });
+  },
 
   clearError: () => set({ lastError: null }),
 

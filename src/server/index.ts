@@ -191,9 +191,12 @@ const server = Bun.serve({
       return proxyToVite(req);
     }
 
-    // Production: serve static files
+    // Production: serve static files. Unknown app routes fall back to index.html
+    // so direct navigation to /room/:id works with the client-side router.
     const staticRes = serveStatic(url.pathname);
     if (staticRes) return staticRes;
+    const appShell = serveStatic("/");
+    if (appShell) return appShell;
 
     return new Response("Not found", { status: 404 });
   },

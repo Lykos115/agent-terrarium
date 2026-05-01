@@ -57,8 +57,10 @@ export function RoomTile({
   return (
     <button
       type="button"
-      onClick={onSelect}
-      onDoubleClick={onEnter}
+      onClick={() => {
+        onSelect?.();
+        onEnter?.();
+      }}
       className={`pixel-room group relative aspect-[4/3] h-full w-full overflow-hidden rounded border text-left shadow-room transition hover:-translate-y-0.5 ${
         selected ? "border-cyanLive ring-2 ring-cyanLive/30" : "border-slate-700/80"
       }`}

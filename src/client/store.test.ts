@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import { useTerrariumStore } from "./store";
+import { pathToRoute, routeToPath, useTerrariumStore } from "./store";
 import type { Agent, ServerMessage } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -247,6 +247,19 @@ describe("store: agentList derived field", () => {
 // ---------------------------------------------------------------------------
 // Route
 // ---------------------------------------------------------------------------
+
+describe("route path helpers", () => {
+  it("maps grid route to /", () => {
+    expect(routeToPath({ name: "grid" })).toBe("/");
+    expect(pathToRoute("/")).toEqual({ name: "grid" });
+  });
+
+  it("maps room routes to /room/:id", () => {
+    expect(routeToPath({ name: "room", agentId: "agent 1" })).toBe("/room/agent%201");
+    expect(pathToRoute("/room/agent%201")).toEqual({ name: "room", agentId: "agent 1" });
+  });
+});
+
 
 describe("store: route", () => {
   it("defaults to grid", () => {
