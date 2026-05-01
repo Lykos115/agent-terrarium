@@ -183,11 +183,7 @@ export const useTerrariumStore = create<TerrariumState>((set, get) => ({
       case "agent_list": {
         const agents = new Map<string, Agent>();
         for (const a of message.data.agents) agents.set(a.id, a);
-        const archivedAgents = new Map<string, Agent>();
-        for (const a of message.data.archivedAgents ?? []) {
-          archivedAgents.set(a.id, { ...a, archived: true });
-        }
-        set({ ...withAgents(agents), archivedAgents, agentListLoaded: true });
+        set({ ...withAgents(agents), agentListLoaded: true });
         return;
       }
 

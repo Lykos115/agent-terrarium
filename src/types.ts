@@ -56,7 +56,7 @@ export interface ChatMessage {
 export type ServerMessage =
   | { type: "connected" }
   | { type: "pong" }
-  | { type: "agent_list"; data: { agents: Agent[]; archivedAgents?: Agent[] } }
+  | { type: "agent_list"; data: { agents: Agent[] } }
   | { type: "agent_added"; data: { agent: Agent } }
   | { type: "agent_archived"; data: { agentId: string } }
   | { type: "agent_restored"; data: { agent: Agent } }

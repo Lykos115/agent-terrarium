@@ -166,7 +166,7 @@ describe("TerrariumWebSocketRelay", () => {
       expect(list.data.agents[0]!.id).toBe(agent.id);
     });
 
-    it("excludes archived agents from active list but includes them for restore UI", async () => {
+    it("excludes archived agents from the initial agent_list", async () => {
       await store.createAgent({ ...sampleConfig, name: "Active" });
       const b = await store.createAgent({ ...sampleConfig, name: "Archived" });
       await store.archiveAgent(b.id);
@@ -175,7 +175,6 @@ describe("TerrariumWebSocketRelay", () => {
       const list = await c.waitFor((m) => m.type === "agent_list");
       if (list.type !== "agent_list") throw new Error();
       expect(list.data.agents.map((a) => a.name)).toEqual(["Active"]);
-      expect(list.data.archivedAgents?.map((a) => a.name)).toEqual(["Archived"]);
     });
   });
 

@@ -374,9 +374,7 @@ export class TerrariumWebSocketRelay implements WebSocketRelay {
 
   private async sendAgentList(ws: ServerWebSocket<unknown>): Promise<void> {
     const agents = await this.store.listAgents(false);
-    const allAgents = await this.store.listAgents(true);
-    const archivedAgents = allAgents.filter((agent) => agent.archived);
-    this.sendTo(ws, { type: "agent_list", data: { agents, archivedAgents } });
+    this.sendTo(ws, { type: "agent_list", data: { agents } });
   }
 
   private sendNotFoundOrRethrow(
